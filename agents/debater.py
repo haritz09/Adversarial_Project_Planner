@@ -9,7 +9,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-llm_debater = ChatGroq(model="llama-3.1-8b-instant")
+
+def get_llm() -> ChatGroq:
+    return ChatGroq(model="llama-3.1-8b-instant")
 
 
 def build_debate1_prompt_A(state: DebateState) -> str:
