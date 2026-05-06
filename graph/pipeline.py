@@ -2,15 +2,9 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 from graph.state import DebateState
 from agents.intake import intake_node
+from agents.debater import debate1_A, debate1_B
 
 builder = StateGraph(DebateState)
-def debate1_A(state: DebateState) -> dict:
-	return {"debate1_arguments": state.get("debate1_arguments", []) + [{"agent": "A", "argument": "(placeholder)", "round": 1}], "current_node": "debate1_A"}
-
-
-def debate1_B(state: DebateState) -> dict:
-	return {"debate1_arguments": state.get("debate1_arguments", []) + [{"agent": "B", "argument": "(placeholder)", "round": 1}], "current_node": "debate1_B"}
-
 
 def debate1_judge(state: DebateState) -> dict:
 	return {"debate1_decision": "choose_stack_placeholder", "debate1_judge_rationale": "(placeholder rationale)", "current_node": "debate1_judge"}
