@@ -3,12 +3,9 @@ from langgraph.checkpoint.memory import MemorySaver
 from graph.state import DebateState
 from agents.intake import intake_node
 from agents.debater import debate1_A, debate1_B
+from agents.judge import should_continue_debate1, debate1_judge
 
 builder = StateGraph(DebateState)
-
-def debate1_judge(state: DebateState) -> dict:
-	return {"debate1_decision": "choose_stack_placeholder", "debate1_judge_rationale": "(placeholder rationale)", "current_node": "debate1_judge"}
-
 
 def architecture_generator(state: DebateState) -> dict:
 	return {"architecture_doc": "# Architecture\n(placeholder)\n", "current_node": "architecture_generator"}
@@ -69,7 +66,7 @@ builder.add_node(notion_writer)
 builder.add_edge("intake_node", "debate1_A")
 builder.add_edge("debate1_A", "debate1_B")
 builder.add_edge("debate1_B", "debate1_judge")
-builder.add_edge("debate1_judge", "architecture_generator")
+builder.add_conditional_edges("debate1_judge", should_continue_debate1)
 builder.add_edge("architecture_generator", "debate2_A")
 builder.add_edge("debate2_A", "debate2_B")
 builder.add_edge("debate2_B", "debate2_judge")
