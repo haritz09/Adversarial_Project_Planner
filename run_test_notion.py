@@ -37,7 +37,7 @@ server_params = StdioServerParameters(
 )
 
 # Parent page id provided by the user (from the Notion link)
-PARENT_PAGE_ID = '356ae85ff5738038a2c8e4708b437de2'
+PARENT_PAGE_ID = os.gentenv('NOTION_PARENT_PAGE_ID')
 
 async def test_notion():
     async with stdio_client(server_params) as (read, write):
