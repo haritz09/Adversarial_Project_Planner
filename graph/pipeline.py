@@ -4,12 +4,9 @@ from graph.state import DebateState
 from agents.intake import intake_node
 from agents.debater import debate1_A, debate1_B
 from agents.judge import should_continue_debate1, debate1_judge
+from agents.genetators import architecture_generator, scope_generator, plan_generator
 
 builder = StateGraph(DebateState)
-
-def architecture_generator(state: DebateState) -> dict:
-	return {"architecture_doc": "# Architecture\n(placeholder)\n", "current_node": "architecture_generator"}
-
 
 def debate2_A(state: DebateState) -> dict:
 	return {"debate2_arguments": state.get("debate2_arguments", []) + [{"agent": "A", "argument": "(approach arg)", "round": 1}], "current_node": "debate2_A"}
@@ -29,11 +26,6 @@ def requirements_generator(state: DebateState) -> dict:
 	return {"requirements_doc": reqs, "current_node": "requirements_generator"}
 
 
-def plan_generator(state: DebateState) -> dict:
-	# Compose a compact project plan for MVP
-	plan_md = "# Project Plan\n- Phase 1: MVP (placeholder)\n"
-	return {"project_plan_doc": plan_md, "current_node": "plan_generator"}
-
 
 def notion_writer(state: DebateState) -> dict:
 	# In production this will call Notion MCP and create pages sequentially.
@@ -52,14 +44,15 @@ builder.add_node(debate1_A)
 builder.add_node(debate1_B)
 builder.add_node(debate1_judge)
 builder.add_node(architecture_generator)
+builder.add_node(scope_generator)
+builder.add_node(plan_generator)
 
 # Debate 2 always runs (do not skip)
 builder.add_node(debate2_A)
 builder.add_node(debate2_B)
 builder.add_node(debate2_judge)
-
 builder.add_node(requirements_generator)
-builder.add_node(plan_generator)
+
 builder.add_node(notion_writer)
 
 # Linear edges following the pipeline; using explicit ordering ensures debate2 always executes
@@ -67,13 +60,17 @@ builder.add_edge("intake_node", "debate1_A")
 builder.add_edge("debate1_A", "debate1_B")
 builder.add_edge("debate1_B", "debate1_judge")
 builder.add_conditional_edges("debate1_judge", should_continue_debate1)
-builder.add_edge("architecture_generator", "debate2_A")
-builder.add_edge("debate2_A", "debate2_B")
-builder.add_edge("debate2_B", "debate2_judge")
-builder.add_edge("debate2_judge", "requirements_generator")
-builder.add_edge("requirements_generator", "plan_generator")
+builder.add_edge("architecture_generator", "scope_generator")
+builder.add_edge("scope_generator", "plan_generator")
 builder.add_edge("plan_generator", "notion_writer")
 builder.set_finish_point("notion_writer")
+
+# builder.add_edge("debate2_A", "debate2_B")
+# builder.add_edge("debate2_B", "debate2_judge")
+# builder.add_edge("debate2_judge", "requirements_generator")
+# builder.add_edge("requirements_generator", "plan_generator")
+# builder.add_edge("plan_generator", "notion_writer")
+# builder.set_finish_point("notion_writer")
 
 memory = MemorySaver()
 graph = builder.compile(checkpointer=memory)
