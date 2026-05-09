@@ -16,3 +16,5 @@ env/
 
 # Pytest
 .pytest_cache/
+
+run_test_notion.py

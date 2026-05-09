@@ -5,6 +5,7 @@ from agents.intake import intake_node
 from agents.debater import debate1_A, debate1_B
 from agents.judge import should_continue_debate1, debate1_judge
 from agents.genetators import architecture_generator, scope_generator, plan_generator
+from tools.notion import notion_writer
 
 builder = StateGraph(DebateState)
 
@@ -24,16 +25,6 @@ def requirements_generator(state: DebateState) -> dict:
 	# Generator should create structured documents using judge decision and project_context
 	reqs = [{"description": "Placeholder requirement", "priority": "Must", "type": "func"}]
 	return {"requirements_doc": reqs, "current_node": "requirements_generator"}
-
-
-
-def notion_writer(state: DebateState) -> dict:
-	# In production this will call Notion MCP and create pages sequentially.
-	# Here we record placeholder page IDs and URLs.
-	root_id = state.get("notion_parent_page_id") or "NOTION_PARENT_PLACEHOLDER"
-	page_ids = {"root": root_id, "architecture": f"{root_id}-arch", "plan": f"{root_id}-plan"}
-	urls = {k: f"https://notion.fake/{v}" for k, v in page_ids.items()}
-	return {"notion_page_ids": page_ids, "notion_urls": urls, "current_node": "notion_writer"}
 
 
 # --- Build graph nodes and edges following AGENT_CONTEXT.md order ---

@@ -12,6 +12,7 @@ load_dotenv()
 def get_llm() -> ChatGroq:
     return ChatGroq(model="llama-3.1-8b-instant")
 
+llm_debater = get_llm()
 
 def build_debate1_prompt_A(state: DebateState) -> str:
     ctx = state["project_context"]

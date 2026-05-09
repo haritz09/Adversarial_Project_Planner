@@ -5,7 +5,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-llm_generator = ChatGoogleGenerativeAI(model="gemini-1.5-flash")
+def get_llm() -> ChatGoogleGenerativeAI:
+    return ChatGoogleGenerativeAI(model="gemini-2.5-flash")
+
+llm_generator = get_llm()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
