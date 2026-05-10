@@ -68,48 +68,52 @@ Be specific and concise. No generic advice.
 
 SCOPE_PROMPT = """You are a senior product manager. Define the project scope concisely.
 
-PROJECT: {project_block}
-ARCHITECTURE SUMMARY: {architecture_summary}
+    PROJECT: {project_block}
+    ARCHITECTURE SUMMARY: {architecture_summary}
 
-Write in Markdown with these sections:
-## Objectives
-3-5 clear, measurable objectives.
+    Write in Markdown with these sections:
+    ## Objectives
+    3-5 clear, measurable objectives.
 
-## MVP Definition
-Core features included in the MVP. Be specific about what ships first.
+    ## MVP Definition
+    Core features included in the MVP. Be specific about what ships first.
 
-## Out of Scope
-What will NOT be built in this version (prevents scope creep).
+    ## Out of Scope
+    What will NOT be built in this version (prevents scope creep).
 
-## Success Criteria
-3-5 measurable criteria for project success.
+    ## Success Criteria
+    3-5 measurable criteria for project success.
 
-Be concise. Avoid generic statements.
+    Be concise. Avoid generic statements.
 """
 
 PLAN_PROMPT = """You are a senior project manager. Create a realistic project plan.
 
-PROJECT: {project_block}
-STACK: {decision}
-SCOPE SUMMARY: {scope_summary}
+    PROJECT: {project_block}
+    STACK: {decision}
+    SCOPE SUMMARY: {scope_summary}
 
-Write in Markdown with these sections:
-## Phases
-3-5 phases. For each: name, duration range (e.g. "3-5 days"), main tasks, deliverable.
+    Write in Markdown with these sections:
+    ## Phases
+    3-5 phases. For each: name, duration range (e.g. "3-5 days"), main tasks, deliverable.
 
-## Milestones
-| Milestone | Target Date | Description |
-Calculate dates from today ({today}).
+    ## Milestones
+    | Milestone | Target Date | Description |
+    Calculate dates from today ({today}).
 
-## Time Estimates
-| Task | Phase | Effort Range |
-Use ranges like "2-4h" or "1-2 days". Never fixed numbers.
+    ## Time Estimates
+    | Task | Phase | Effort Range |
+    Use ranges like "6-8h". Never fixed numbers.
 
-## Risks
-| Risk | Probability | Impact | Mitigation |
-Probability/Impact: Low / Medium / High. Top 3-5 risks only.
+    ## Risks
+    | Risk | Probability | Impact | Mitigation |
+    Probability/Impact: Low / Medium / High. Top 4-6 risks only.
 
-Be realistic. If timeline is tight, say so and adjust scope accordingly.
+    IMPORTANT: Start each section directly with the Markdown heading. 
+    Do not add any introductory text before the first heading.
+    Do not add commentary between sections.
+
+    Be realistic. If timeline is tight, say so and adjust scope accordingly.
 """
 
 
@@ -176,4 +180,45 @@ def plan_generator(state: DebateState) -> dict:
     return {
         "project_plan_doc": _invoke(prompt),
         "current_node": "plan_generator",
+    }
+
+def debate_flow_generator(state: DebateState) -> dict:
+    """
+    Builds a Markdown document summarising the full debate flow.
+    No LLM call needed — purely formats existing state data.
+    """
+    lines = ["# Debate Flow\n"]
+
+    # ── Debate history by round ──────────────────────────────────────────────
+    arguments = state.get("debate1_arguments", [])
+    rounds = sorted(set(a["round"] for a in arguments))
+
+    for r in rounds:
+        lines.append(f"## Round {r}")
+        for arg in [a for a in arguments if a["round"] == r]:
+            lines.append(f"### Agent {arg['agent']}")
+            lines.append(arg["argument"])
+            lines.append("")
+
+    # ── Judge decision ───────────────────────────────────────────────────────
+    lines.append("## Judge Decision")
+    lines.append(f"**Winner:** Agent {state.get('debate1_winner', 'N/A')}")
+    lines.append(f"**Chosen stack:** {state.get('debate1_winning_stack', 'N/A')}")
+    lines.append("")
+    lines.append(f"**Rationale:** {state.get('debate1_judge_rationale', 'N/A')}")
+    lines.append("")
+
+    # ── Scores ───────────────────────────────────────────────────────────────
+    a_score = state.get("debate1_agent_a_score")
+    b_score = state.get("debate1_agent_b_score")
+    if a_score is not None and b_score is not None:
+        lines.append("## Scores")
+        lines.append(f"| Agent | Score |")
+        lines.append(f"|---|---|")
+        lines.append(f"| Agent A | {a_score}/10 |")
+        lines.append(f"| Agent B | {b_score}/10 |")
+
+    return {
+        "debate_flow_doc": "\n".join(lines),
+        "current_node": "debate_flow_generator",
     }

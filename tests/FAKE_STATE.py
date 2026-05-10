@@ -195,7 +195,7 @@ Deliverable: Production-ready application accessible via public URL
 | Real-time performance issues under load | Low | Medium | Test with Firebase emulator early; monitor latency from week 2 |
 | Cloud Run cold start delays in auth service | Low | Low | Keep service warm with a scheduled ping if latency becomes an issue |
 """,
- 
+    "debate_flow_doc": "# Debate Flow\n\n## Round 1\n### Agent A\nI propose Firebase...\n\n### Agent B\nI prefer Node.js...\n\n## Judge Decision\n**Winner:** Agent B\n**Chosen stack:** Node.js + Socket.io\n\n**Rationale:** Better long-term control.\n\n## Scores\n| Agent | Score |\n|---|---|\n| Agent A | 7/10 |\n| Agent B | 9/10 |",
     "notion_parent_page_id": "356ae85ff5738038a2c8e4708b437de2",
     "notion_urls": {},
     "notion_page_ids": {},

@@ -33,7 +33,7 @@ def build_judge_prompt(state: DebateState) -> str:
             debate_history += f"Agent {arg['agent']}: {arg['argument']}\n"
  
     return f"""
-        You are an impartial technical judge evaluating a debate about the best tech stack for a software project.
+        You are an impartial and critical technical judge evaluating a debate about the best tech stack for a software project.
         
         PROJECT CONTEXT:
         {project_info}
@@ -42,7 +42,7 @@ def build_judge_prompt(state: DebateState) -> str:
         {debate_history}
         
         Your task:
-        1. Evaluate the quality of each agent's arguments across all rounds
+        1. Evaluate the quality of each agent's arguments across all rounds being critical and do not hesitate on calling out incorrect arguments.
         2. Decide if the debate has reached a clear enough conclusion or needs another round
         3. If concluding: pick the winning position and explain why it best fits the project
         
@@ -55,8 +55,8 @@ def build_judge_prompt(state: DebateState) -> str:
         {{
             "needs_another_round": true or false,
             "reason_for_continuing": "only if needs_another_round is true, explain what is still unresolved",
-            "winner": "A" or "B" or "tie" (only if needs_another_round is false),
-            "winning_stack": "the concrete stack chosen e.g. React + Node.js + PostgreSQL" (only if needs_another_round is false),
+            "winner": "A" or "B" or "tie" (never null or empty),
+            "winning_stack": "the concrete stack chosen e.g. React + Node.js + PostgreSQL" (never null or empty),
             "rationale": "2-3 sentences explaining the decision" (only if needs_another_round is false),
             "agent_a_score": a number from 0 to 10,
             "agent_b_score": a number from 0 to 10
@@ -129,7 +129,8 @@ def debate1_judge(state: DebateState) -> dict:
     return {
         "debate1_decision": decision.get("winning_stack", "undetermined"),
         "debate1_judge_rationale": decision.get("rationale") or decision.get("reason_for_continuing", ""),
-        "debate1_winner": decision.get("winner", "tie"),
+        "debate1_winner": decision.get("winner") or "tie",
+        "debate1_winning_stack": decision.get("winning_stack") or "undetermined",
         "debate1_winning_stack": decision.get("winning_stack", ""),
         "debate1_needs_another_round": needs_another_round,
         "debate1_agent_a_score": decision.get("agent_a_score", 5),

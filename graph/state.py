@@ -30,6 +30,7 @@ class DebateState(TypedDict):
     scope_doc: str                 # MVP, objectives, out-of-scope
     techstack_doc: str             # chosen stack + debate justification
     timeline_doc: str              # contains Mermaid Gantt + WBS blocks
+    debate_flow_doc: str           # full debate transcript + judge decision
 
     # Structured documents (lists of TypedDicts → Notion tables/checklists)
     requirements_doc: list[Requirement]

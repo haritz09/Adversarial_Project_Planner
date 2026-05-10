@@ -64,6 +64,11 @@ def _is_table_separator(row: str) -> bool:
     return bool(re.match(r"^\|[\s\-\|:]+\|$", row))
 
 
+def _is_bold_header_row(cells: list[str]) -> bool:
+    """Detect rows like | **Milestone** | **Target Date** | that duplicate the header."""
+    return all(c.startswith("**") and c.endswith("**") for c in cells if c)
+
+
 def _parse_table(lines: list[str], i: int) -> tuple[dict | None, int]:
     """
     Parses a Markdown table starting at lines[i].
@@ -78,6 +83,8 @@ def _parse_table(lines: list[str], i: int) -> tuple[dict | None, int]:
         if _is_table_separator(row):
             continue
         cells = [c.strip() for c in row.strip("|").split("|")]
+        if _is_bold_header_row(cells):
+            continue
         table_rows.append(cells)
  
     if not table_rows:
@@ -141,12 +148,23 @@ def _parse_heading(line: str) -> dict | None:
                 "heading_1": {"rich_text": _rich_text(line[2:].strip())}}
     return None
 
+def _clean_markdown(md: str) -> str:
+    """Normalize LLM markdown quirks before parsing."""
+    # Strip bold markers from text content (keep structure, remove **)
+    md = re.sub(r'\*\*(.+?)\*\*', r'\1', md)
+    # Normalize * bullets to - bullets  
+    md = re.sub(r'^\* ', '- ', md, flags=re.MULTILINE)
+    # Strip leading * without space (orphan asterisks)
+    md = re.sub(r'^\*\s+', '- ', md, flags=re.MULTILINE)
+    return md
+
 
 def markdown_to_blocks(md: str) -> list[dict]:
     """
     Converts a Markdown string to a list of Notion block objects.
     Supports: h1/h2/h3, bullet lists, numbered lists, code blocks, tables, paragraphs.
     """
+    md = _clean_markdown(md)
     blocks = []
     lines = md.split("\n")
     i = 0
@@ -309,6 +327,17 @@ async def _write_all_pages(state: DebateState) -> dict:
                 )
                 page_ids["plan"] = plan_id
                 urls["plan"] = f"https://notion.so/{plan_id.replace('-', '')}"
+
+            # 6. Debate Flow
+            if state.get("debate_flow_doc"):
+                flow_id = await _create_page(
+                    session,
+                    parent_id=root_id,
+                    title="4. Debate Flow",
+                    content=state["debate_flow_doc"],
+                )
+                page_ids["flow"] = flow_id
+                urls["flow"] = f"https://notion.so/{flow_id.replace('-', '')}"
 
     return {"notion_page_ids": page_ids, "notion_urls": urls}
 
