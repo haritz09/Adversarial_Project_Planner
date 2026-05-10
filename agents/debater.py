@@ -31,16 +31,20 @@ def build_debate1_prompt_A(state: DebateState) -> str:
     stack_instruction = ""
     if provided.get("stack") and ctx.get("stack"):
         stack_instruction = f"""
-            The user has already specified they want to use: {ctx["stack"]}.
-            Do NOT argue against this choice. Instead:
-            - Validate whether it is a good fit for this project
-            - Identify potential risks or limitations with this stack
-            - Suggest complementary tools or improvements
+            The user has specified they want to use: {ctx["stack"]}.
+            Act as a Principal Architect with zero tolerance for technically dangerous choices.
+            Evaluate against these hard criteria:
+            - REJECT if the stack violates fundamental requirements of the project
+            - CHALLENGE if the stack introduces significant risk that needs mitigation
+            - VALIDATE if the stack is genuinely appropriate, even if not your first choice
+            If you reject or challenge: be specific about WHY it fails for THIS project's constraints.
+            Name the exact failure mode (race condition, GC pause, throughput ceiling, etc.).
+            Do not suggest mitigations for fundamentally wrong choices — propose a correct alternative instead.
         """
     else:
         stack_instruction = """
             Propose the best tech stack for this project.
-            Consider: scalability needs, team size, timeline constraints, and long-term maintainability.
+            Consider: fundamental requirements of the project, scalability needs, team size, timeline constraints, and long-term maintainability.
         """
 
     # If this is round 2+, acknowledge previous arguments
@@ -58,7 +62,7 @@ def build_debate1_prompt_A(state: DebateState) -> str:
 
     return f"""
         You are Agent A in a technical debate about the best stack for a software project.
-        Your role is to propose and defend a concrete technical approach.
+        Your role is to propose a concrete technical approach.
         Be specific, concise, and grounded in the project constraints.
 
         PROJECT CONTEXT:
@@ -90,11 +94,6 @@ def build_debate1_prompt_B(state: DebateState) -> str:
         a_context = f"""
             Agent A has proposed the following:
             \"{agent_a_argument}\"
-
-            Your job is to challenge this proposal. You can:
-            - Disagree and propose a completely different stack
-            - Partially agree but highlight critical flaws or risks
-            - Accept parts of the proposal but argue for key modifications
         """
     else:
         # Fallback — should not happen in normal flow
@@ -120,12 +119,15 @@ def build_debate1_prompt_B(state: DebateState) -> str:
     # Round 2+ — B refines based on A's updated position
     previous_context = ""
     if current_round > 1:
-        last_a_prev = [a for a in previous_args if a["agent"] == "A" and a["round"] < current_round]
-        if last_a_prev:
+        last_b_args = [a for a in previous_args if a["agent"] == "B" and a["round"] < current_round]
+        if last_b_args:
+            last_b = last_b_args[-1]["argument"]
             previous_context = f"""
-                This is round {current_round}. You have already argued before.
-                Agent A has refined their position — respond to their updated argument specifically.
-                Avoid repeating points you already made in previous rounds.
+                This is round {current_round}. In the previous round you argued:
+                \"{last_b}\"
+                
+                Do not repeat the same points. Respond specifically to Agent A's 
+                updated argument above and refine or defend your position accordingly.
             """
 
     return f"""

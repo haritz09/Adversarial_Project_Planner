@@ -68,48 +68,52 @@ Be specific and concise. No generic advice.
 
 SCOPE_PROMPT = """You are a senior product manager. Define the project scope concisely.
 
-PROJECT: {project_block}
-ARCHITECTURE SUMMARY: {architecture_summary}
+    PROJECT: {project_block}
+    ARCHITECTURE SUMMARY: {architecture_summary}
 
-Write in Markdown with these sections:
-## Objectives
-3-5 clear, measurable objectives.
+    Write in Markdown with these sections:
+    ## Objectives
+    3-5 clear, measurable objectives.
 
-## MVP Definition
-Core features included in the MVP. Be specific about what ships first.
+    ## MVP Definition
+    Core features included in the MVP. Be specific about what ships first.
 
-## Out of Scope
-What will NOT be built in this version (prevents scope creep).
+    ## Out of Scope
+    What will NOT be built in this version (prevents scope creep).
 
-## Success Criteria
-3-5 measurable criteria for project success.
+    ## Success Criteria
+    3-5 measurable criteria for project success.
 
-Be concise. Avoid generic statements.
+    Be concise. Avoid generic statements.
 """
 
 PLAN_PROMPT = """You are a senior project manager. Create a realistic project plan.
 
-PROJECT: {project_block}
-STACK: {decision}
-SCOPE SUMMARY: {scope_summary}
+    PROJECT: {project_block}
+    STACK: {decision}
+    SCOPE SUMMARY: {scope_summary}
 
-Write in Markdown with these sections:
-## Phases
-3-5 phases. For each: name, duration range (e.g. "3-5 days"), main tasks, deliverable.
+    Write in Markdown with these sections:
+    ## Phases
+    3-5 phases. For each: name, duration range (e.g. "3-5 days"), main tasks, deliverable.
 
-## Milestones
-| Milestone | Target Date | Description |
-Calculate dates from today ({today}).
+    ## Milestones
+    | Milestone | Target Date | Description |
+    Calculate dates from today ({today}).
 
-## Time Estimates
-| Task | Phase | Effort Range |
-Use ranges like "2-4h" or "1-2 days". Never fixed numbers.
+    ## Time Estimates
+    | Task | Phase | Effort Range |
+    Use ranges like "6-8h". Never fixed numbers.
 
-## Risks
-| Risk | Probability | Impact | Mitigation |
-Probability/Impact: Low / Medium / High. Top 3-5 risks only.
+    ## Risks
+    | Risk | Probability | Impact | Mitigation |
+    Probability/Impact: Low / Medium / High. Top 4-6 risks only.
 
-Be realistic. If timeline is tight, say so and adjust scope accordingly.
+    IMPORTANT: Start each section directly with the Markdown heading. 
+    Do not add any introductory text before the first heading.
+    Do not add commentary between sections.
+
+    Be realistic. If timeline is tight, say so and adjust scope accordingly.
 """
 
 
