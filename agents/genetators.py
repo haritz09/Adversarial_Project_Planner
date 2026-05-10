@@ -177,3 +177,44 @@ def plan_generator(state: DebateState) -> dict:
         "project_plan_doc": _invoke(prompt),
         "current_node": "plan_generator",
     }
+
+def debate_flow_generator(state: DebateState) -> dict:
+    """
+    Builds a Markdown document summarising the full debate flow.
+    No LLM call needed — purely formats existing state data.
+    """
+    lines = ["# Debate Flow\n"]
+
+    # ── Debate history by round ──────────────────────────────────────────────
+    arguments = state.get("debate1_arguments", [])
+    rounds = sorted(set(a["round"] for a in arguments))
+
+    for r in rounds:
+        lines.append(f"## Round {r}")
+        for arg in [a for a in arguments if a["round"] == r]:
+            lines.append(f"### Agent {arg['agent']}")
+            lines.append(arg["argument"])
+            lines.append("")
+
+    # ── Judge decision ───────────────────────────────────────────────────────
+    lines.append("## Judge Decision")
+    lines.append(f"**Winner:** Agent {state.get('debate1_winner', 'N/A')}")
+    lines.append(f"**Chosen stack:** {state.get('debate1_winning_stack', 'N/A')}")
+    lines.append("")
+    lines.append(f"**Rationale:** {state.get('debate1_judge_rationale', 'N/A')}")
+    lines.append("")
+
+    # ── Scores ───────────────────────────────────────────────────────────────
+    a_score = state.get("debate1_agent_a_score")
+    b_score = state.get("debate1_agent_b_score")
+    if a_score is not None and b_score is not None:
+        lines.append("## Scores")
+        lines.append(f"| Agent | Score |")
+        lines.append(f"|---|---|")
+        lines.append(f"| Agent A | {a_score}/10 |")
+        lines.append(f"| Agent B | {b_score}/10 |")
+
+    return {
+        "debate_flow_doc": "\n".join(lines),
+        "current_node": "debate_flow_generator",
+    }

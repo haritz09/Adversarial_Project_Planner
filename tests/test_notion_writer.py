@@ -27,12 +27,10 @@ def test_notion_writer_creates_pages():
 
 
 def test_notion_writer_all_pages_present():
-    """Verifies all expected pages were created."""
     result = notion_writer(FAKE_STATE)
     urls = result["notion_urls"]
 
-    expected = ["root", "architecture", "scope", "plan_root", "plan"]
+    expected = ["root", "architecture", "scope", "plan_root", "plan", "flow"]
     for key in expected:
         assert key in urls, f"Missing page: {key}"
-
     print("✅ All expected pages created")

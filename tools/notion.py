@@ -310,6 +310,17 @@ async def _write_all_pages(state: DebateState) -> dict:
                 page_ids["plan"] = plan_id
                 urls["plan"] = f"https://notion.so/{plan_id.replace('-', '')}"
 
+            # 6. Debate Flow
+            if state.get("debate_flow_doc"):
+                flow_id = await _create_page(
+                    session,
+                    parent_id=root_id,
+                    title="4. Debate Flow",
+                    content=state["debate_flow_doc"],
+                )
+                page_ids["flow"] = flow_id
+                urls["flow"] = f"https://notion.so/{flow_id.replace('-', '')}"
+
     return {"notion_page_ids": page_ids, "notion_urls": urls}
 
 
