@@ -22,15 +22,15 @@ builder.add_node(plan_generator)
 builder.add_node(debate_flow_generator)
 builder.add_node(notion_writer)
 
-# Linear edges following the pipeline; using explicit ordering ensures debate2 always executes
+
 builder.add_edge("intake_node", "debate1_A")
 builder.add_edge("debate1_A", "debate1_B")
 builder.add_edge("debate1_B", "debate1_judge")
-builder.add_conditional_edges("debate1_judge", should_continue_debate1)
+builder.add_conditional_edges("debate1_judge", should_continue_debate1, ["debate1_A", "architecture_generator", "debate_flow_generator"])
 builder.add_edge("architecture_generator", "scope_generator")
 builder.add_edge("scope_generator", "plan_generator")
-builder.add_edge("plan_generator", "debate_flow_generator")
-builder.add_edge("debate_flow_generator", "notion_writer")
+builder.add_edge("plan_generator", "notion_writer")
+
 builder.set_finish_point("notion_writer")
 
 memory = MemorySaver()

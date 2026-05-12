@@ -144,7 +144,6 @@ def architecture_generator(state: DebateState) -> dict:
 
     return {
         "architecture_doc": _invoke(prompt),
-        "current_node": "architecture_generator",
     }
 
 
@@ -158,7 +157,6 @@ def scope_generator(state: DebateState) -> dict:
 
     return {
         "scope_doc": _invoke(prompt),
-        "current_node": "scope_generator",
     }
 
 
@@ -179,7 +177,6 @@ def plan_generator(state: DebateState) -> dict:
 
     return {
         "project_plan_doc": _invoke(prompt),
-        "current_node": "plan_generator",
     }
 
 def debate_flow_generator(state: DebateState) -> dict:
@@ -220,5 +217,4 @@ def debate_flow_generator(state: DebateState) -> dict:
 
     return {
         "debate_flow_doc": "\n".join(lines),
-        "current_node": "debate_flow_generator",
     }

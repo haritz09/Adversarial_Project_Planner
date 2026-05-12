@@ -12,15 +12,22 @@ from graph.pipeline import graph
 from langfuse.langchain import CallbackHandler
 
 
+import uuid
+
 # ── Langfuse setup ────────────────────────────────────────────────────────────
 
 langfuse_handler = CallbackHandler()
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
+# Create a single run_id for the entire session so it's grouped under one trace
+session_run_id = str(uuid.uuid4())
+
 config = {
     "configurable": {"thread_id": "run-1"},
     "callbacks": [langfuse_handler],
+    "run_name": "Adversarial Project Planner",
+    "run_id": session_run_id
 }
 
 
@@ -29,10 +36,8 @@ config = {
 def score_debate(final_state: dict) -> None:
     """Send debate quality scores to Langfuse after the pipeline completes."""
     try:
-        trace_id = langfuse_handler.get_trace_id()
-        if not trace_id:
-            print("⚠️  Langfuse trace ID not found — skipping scores")
-            return
+        
+        trace_id = session_run_id
 
         langfuse_handler.langfuse.score(
             trace_id=trace_id,
