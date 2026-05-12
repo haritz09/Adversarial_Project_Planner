@@ -1,5 +1,7 @@
 langchain-groq
 langgraph
+langfuse
+langchain
 python-dotenv
 mcp
 pytest

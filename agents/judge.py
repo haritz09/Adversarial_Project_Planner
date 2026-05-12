@@ -9,6 +9,7 @@ load_dotenv()
 
 llm_judge = ChatGroq(model="llama-3.1-8b-instant")
 
+MIN_ROUNDS= 2
 MAX_ROUNDS = 3
 
 def build_judge_prompt(state: DebateState) -> str:
@@ -41,15 +42,21 @@ def build_judge_prompt(state: DebateState) -> str:
         DEBATE HISTORY:
         {debate_history}
         
-        Your task:
-        1. Evaluate the quality of each agent's arguments across all rounds being critical and do not hesitate on calling out incorrect arguments.
-        2. Decide if the debate has reached a clear enough conclusion or needs another round
-        3. If concluding: pick the winning position and explain why it best fits the project
-        
-        Evaluate each agent on:
-        - Specificity: are they proposing concrete technologies, not vague concepts?
-        - Relevance: does their proposal fit the timeline, team size, and constraints?
-        - Soundness: is their reasoning logically coherent?
+        Request another round (needs_another_round: true) if ANY of these apply:
+        - An agent made a claim without concrete evidence or specific technology names
+        - A direct question or challenge from one agent was not addressed by the other
+        - Arguments are generic and not grounded in THIS project's specific constraints
+        - The disagreement is still fundamental and unresolved
+        - One agent proposed an alternative but did not justify it against the project constraints
+        - You need one agent to respond directly to the other's strongest point
+
+        Conclude (needs_another_round: false) ONLY if ALL of these are true:
+        - Both agents have argued with concrete, project-specific evidence
+        - The stronger position is clearly justified based on the constraints
+        - Further debate would not change the outcome
+
+        A "tie" is only valid if both positions are genuinely equal after full analysis.
+        Calling a tie to avoid deciding is NOT acceptable.
         
         Respond ONLY with a JSON object in this exact format:
         {{
@@ -133,6 +140,7 @@ def debate1_judge(state: DebateState) -> dict:
         "debate1_winning_stack": decision.get("winning_stack") or "undetermined",
         "debate1_winning_stack": decision.get("winning_stack", ""),
         "debate1_needs_another_round": needs_another_round,
+        "debate1_judge_continue_reason": decision.get("reason_for_continuing", ""),
         "debate1_agent_a_score": decision.get("agent_a_score", 5),
         "debate1_agent_b_score": decision.get("agent_b_score", 5),
         "current_node": "debate1_judge",
@@ -153,6 +161,9 @@ def should_continue_debate1(state: DebateState) -> str:
     Conditional edge function called after debate1_judge.
     Returns the name of the next node.
     """
+    current_round = state.get("debate1_rounds", 1)
+    if current_round < MIN_ROUNDS:
+        return "debate1_A"
     if state.get("debate1_needs_another_round", False):
         return "debate1_A"
     return "architecture_generator"
