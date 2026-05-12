@@ -53,10 +53,17 @@ def build_debate1_prompt_A(state: DebateState) -> str:
         last_b_args = [a for a in previous_args if a["agent"] == "B"]
         if last_b_args:
             last_b = last_b_args[-1]["argument"]
+
+            judge_reason = state.get("debate1_judge_continue_reason", "")
+            judge_section = (
+                f'The judge requested another round because: "{judge_reason}". '
+                f"Address this specific point directly."
+            ) if judge_reason else ""
+            
             previous_context = f"""
                 This is round {current_round}. In the previous round, Agent B argued:
                 \"{last_b}\"
-
+                {judge_section}
                 Refine or defend your position taking their argument into account.
             """
 
@@ -122,10 +129,17 @@ def build_debate1_prompt_B(state: DebateState) -> str:
         last_b_args = [a for a in previous_args if a["agent"] == "B" and a["round"] < current_round]
         if last_b_args:
             last_b = last_b_args[-1]["argument"]
+
+            judge_reason = state.get("debate1_judge_continue_reason", "")
+            judge_section = (
+                f'The judge requested another round because: "{judge_reason}". '
+                f"Address this specific point directly."
+            ) if judge_reason else ""
+
             previous_context = f"""
                 This is round {current_round}. In the previous round you argued:
                 \"{last_b}\"
-                
+                {judge_section}
                 Do not repeat the same points. Respond specifically to Agent A's 
                 updated argument above and refine or defend your position accordingly.
             """

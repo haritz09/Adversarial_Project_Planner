@@ -9,6 +9,7 @@ load_dotenv()
 
 llm_judge = ChatGroq(model="llama-3.1-8b-instant")
 
+MIN_ROUNDS= 2
 MAX_ROUNDS = 3
 
 def build_judge_prompt(state: DebateState) -> str:
@@ -31,6 +32,26 @@ def build_judge_prompt(state: DebateState) -> str:
         debate_history += f"\n--- Round {r} ---\n"
         for arg in round_args:
             debate_history += f"Agent {arg['agent']}: {arg['argument']}\n"
+            
+    final_round_warning = ""
+    if current_round >= MAX_ROUNDS:
+        final_round_warning = """
+        CRITICAL: This is the FINAL round allowed. 
+        You MUST conclude the debate (needs_another_round: false).
+        You MUST declare a clear winner ("A" or "B") and a winning_stack. Do not ask for another round!
+        """
+ 
+    continuation_instructions = ""
+    if not final_round_warning:
+        continuation_instructions = """
+        Request another round (needs_another_round: true) if ANY of these apply:
+        - An agent made a claim without concrete evidence or specific technology names
+        - A direct question or challenge from one agent was not addressed by the other
+        - Arguments are generic and not grounded in THIS project's specific constraints
+        - The disagreement is still fundamental and unresolved
+        - One agent proposed an alternative but did not justify it against the project constraints
+        - You need one agent to respond directly to the other's strongest point
+        """
  
     return f"""
         You are an impartial and critical technical judge evaluating a debate about the best tech stack for a software project.
@@ -40,16 +61,18 @@ def build_judge_prompt(state: DebateState) -> str:
         
         DEBATE HISTORY:
         {debate_history}
+        {final_round_warning}
         
-        Your task:
-        1. Evaluate the quality of each agent's arguments across all rounds being critical and do not hesitate on calling out incorrect arguments.
-        2. Decide if the debate has reached a clear enough conclusion or needs another round
-        3. If concluding: pick the winning position and explain why it best fits the project
-        
-        Evaluate each agent on:
-        - Specificity: are they proposing concrete technologies, not vague concepts?
-        - Relevance: does their proposal fit the timeline, team size, and constraints?
-        - Soundness: is their reasoning logically coherent?
+        {continuation_instructions}
+
+        Conclude (needs_another_round: false) if any of these are true:
+        - Both agents have argued with concrete, project-specific evidence
+        - The stronger position is clearly justified based on the constraints
+        - Further debate would not change the outcome
+        - { "THIS IS THE FINAL ROUND, YOU MUST CONCLUDE" if final_round_warning else "" }
+
+        A "tie" is only valid if both positions are genuinely equal after full analysis.
+        Calling a tie to avoid deciding is NOT acceptable.
         
         Respond ONLY with a JSON object in this exact format:
         {{
@@ -102,10 +125,10 @@ def debate1_judge(state: DebateState) -> dict:
     Also populates debate1_decision and debate1_judge_rationale in the state.
     """
     current_round = state.get("debate1_rounds", 1)
+    arguments = state.get("debate1_arguments", [])
  
     # Force conclusion if max rounds reached — no need to call the LLM
     if current_round > MAX_ROUNDS:
-        arguments = state.get("debate1_arguments", [])
         return {
             "debate1_decision": "max_rounds_reached",
             "debate1_judge_rationale": f"Maximum rounds ({MAX_ROUNDS}) reached. Concluding debate based on arguments so far.",
@@ -125,17 +148,24 @@ def debate1_judge(state: DebateState) -> dict:
     # Never allow more rounds than MAX_ROUNDS
     if current_round >= MAX_ROUNDS:
         needs_another_round = False
+        
+    winner = decision.get("winner")
+    if not winner or winner.upper() in ["N/A", "NULL", "NONE"]:
+        winner = "tie"
+        
+    stack = decision.get("winning_stack")
+    if not stack or stack.upper() in ["N/A", "NULL", "NONE", "UNDETERMINED"]:
+        stack = _extract_best_stack(arguments)
  
     return {
-        "debate1_decision": decision.get("winning_stack", "undetermined"),
+        "debate1_decision": stack,
         "debate1_judge_rationale": decision.get("rationale") or decision.get("reason_for_continuing", ""),
-        "debate1_winner": decision.get("winner") or "tie",
-        "debate1_winning_stack": decision.get("winning_stack") or "undetermined",
-        "debate1_winning_stack": decision.get("winning_stack", ""),
+        "debate1_winner": winner,
+        "debate1_winning_stack": stack,
         "debate1_needs_another_round": needs_another_round,
+        "debate1_judge_continue_reason": decision.get("reason_for_continuing", ""),
         "debate1_agent_a_score": decision.get("agent_a_score", 5),
         "debate1_agent_b_score": decision.get("agent_b_score", 5),
-        "current_node": "debate1_judge",
     }
 
 
@@ -148,11 +178,14 @@ def _extract_best_stack(arguments: list[dict]) -> str:
 
 
 # Conditional edge
-def should_continue_debate1(state: DebateState) -> str:
+def should_continue_debate1(state: DebateState) -> list[str]:
     """
     Conditional edge function called after debate1_judge.
-    Returns the name of the next node.
+    Returns a list of nodes to execute next.
     """
+    current_round = state.get("debate1_rounds", 1)
+    if current_round < MIN_ROUNDS:
+        return ["debate1_A"]
     if state.get("debate1_needs_another_round", False):
-        return "debate1_A"
-    return "architecture_generator"
+        return ["debate1_A"]
+    return ["architecture_generator", "debate_flow_generator"]

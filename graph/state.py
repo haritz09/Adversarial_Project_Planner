@@ -16,14 +16,9 @@ class DebateState(TypedDict):
     debate1_rounds: int
     debate1_decision: str
     debate1_skipped: bool          # True if the user already specified the stack
+    debate1_needs_another_round: bool
+    debate1_judge_continue_reason: str | None
     debate1_judge_rationale: str | None 
-
-    # Debate 2 — Project Approach Strategy
-    debate2_arguments: list[dict]
-    debate2_rounds: int
-    debate2_decision: str
-    debate2_judge_rationale: str | None
-    debate2_page_rationales: dict | None  # {requirements: "...", phases: "..."}
 
     # Narrative documents (Markdown strings)
     architecture_doc: str          # components and key decisions

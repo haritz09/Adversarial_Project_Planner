@@ -76,13 +76,14 @@ def _parse_table(lines: list[str], i: int) -> tuple[dict | None, int]:
     Returns (None, new_index) if no valid rows were found.
     """
     table_rows = []
- 
+    NOTION_MAX_CELL_LENGTH = 2000
     while i < len(lines) and lines[i].startswith("|"):
         row = lines[i]
         i += 1
         if _is_table_separator(row):
             continue
         cells = [c.strip() for c in row.strip("|").split("|")]
+        cells = [c[:NOTION_MAX_CELL_LENGTH] for c in cells]
         if _is_bold_header_row(cells):
             continue
         table_rows.append(cells)
