@@ -171,7 +171,6 @@ def main():
 
     if winner and stack:
         print(f"\n⚖️  Debate summary:")
-        print(f"   Rounds:  {rounds}")
         print(f"   Winner:  Agent {winner}")
         print(f"   Stack:   {stack}")
         if a_score and b_score:
