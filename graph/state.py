@@ -19,6 +19,10 @@ class DebateState(TypedDict):
     debate1_needs_another_round: bool
     debate1_judge_continue_reason: str | None
     debate1_judge_rationale: str | None 
+    debate1_winner: str | None
+    debate1_winning_stack: str | None
+    debate1_agent_a_score: int | float | None
+    debate1_agent_b_score: int | float | None
 
     # Narrative documents (Markdown strings)
     architecture_doc: str          # components and key decisions

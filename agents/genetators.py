@@ -199,8 +199,8 @@ def debate_flow_generator(state: DebateState) -> dict:
 
     # ── Judge decision ───────────────────────────────────────────────────────
     lines.append("## Judge Decision")
-    lines.append(f"**Winner:** Agent {state.get('debate1_winner', 'N/A')}")
-    lines.append(f"**Chosen stack:** {state.get('debate1_winning_stack', 'N/A')}")
+    lines.append(f"**Winner:** Agent {state.get('debate1_winner', 'tie')}")
+    lines.append(f"**Chosen stack:** {state.get('debate1_winning_stack', state.get('debate1_decision', 'N/A'))}")
     lines.append("")
     lines.append(f"**Rationale:** {state.get('debate1_judge_rationale', 'N/A')}")
     lines.append("")

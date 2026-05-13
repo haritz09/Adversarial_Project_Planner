@@ -40,6 +40,7 @@ def build_debate1_prompt_A(state: DebateState) -> str:
             If you reject or challenge: be specific about WHY it fails for THIS project's constraints.
             Name the exact failure mode (race condition, GC pause, throughput ceiling, etc.).
             Do not suggest mitigations for fundamentally wrong choices — propose a correct alternative instead.
+            Cover ALL dimensions: backend, database, frontend/mobile strategy, key infrastructure, not just the stack that was given.
         """
     else:
         stack_instruction = """

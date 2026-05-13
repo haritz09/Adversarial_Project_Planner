@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-llm_judge = ChatGroq(model="llama-3.1-8b-instant")
+llm_judge = ChatGroq(model="llama-3.3-70b-versatile")
 
 MIN_ROUNDS= 2
 MAX_ROUNDS = 3
@@ -77,13 +77,17 @@ def build_judge_prompt(state: DebateState) -> str:
         Respond ONLY with a JSON object in this exact format:
         {{
             "needs_another_round": true or false,
-            "reason_for_continuing": "only if needs_another_round is true, explain what is still unresolved",
-            "winner": "A" or "B" or "tie" (never null or empty),
-            "winning_stack": "the concrete stack chosen e.g. React + Node.js + PostgreSQL" (never null or empty),
-            "rationale": "2-3 sentences explaining the decision" (only if needs_another_round is false),
+            "reason_for_continuing": "if needs_another_round is true, explain what is still unresolved",
+            "winner": "A" or "B",
+            "winning_stack": "the concrete stack chosen e.g. React + Node.js + PostgreSQL",
+            "rationale": "2-3 sentences explaining why A or B won",
             "agent_a_score": a number from 0 to 10,
             "agent_b_score": a number from 0 to 10
         }}
+        
+        CRITICAL: 
+        - DO NOT use "N/A", "null", or "none" for winner or winning_stack if needs_another_round is false.
+        - You ARE the decision maker. Pick the strongest argument.
         
         Return ONLY the JSON object. No explanation, no markdown, no code fences.
     """

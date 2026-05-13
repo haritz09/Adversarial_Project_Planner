@@ -10,6 +10,7 @@ load_dotenv()
 from langgraph.types import Command
 from graph.pipeline import graph
 from langfuse.langchain import CallbackHandler
+from langfuse import Langfuse
 
 
 import uuid
@@ -17,6 +18,7 @@ import uuid
 # ── Langfuse setup ────────────────────────────────────────────────────────────
 
 langfuse_handler = CallbackHandler()
+langfuse_client = Langfuse()
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -27,36 +29,38 @@ config = {
     "configurable": {"thread_id": "run-1"},
     "callbacks": [langfuse_handler],
     "run_name": "Adversarial Project Planner",
-    "run_id": session_run_id
+    "run_id": uuid.UUID(session_run_id)
 }
 
 
 # ── Langfuse scoring ──────────────────────────────────────────────────────────
 
 def score_debate(final_state: dict) -> None:
-    """Send debate quality scores to Langfuse after the pipeline completes."""
     try:
-        
         trace_id = session_run_id
+        if not trace_id:
+            print("⚠️  No trace ID available — skipping scores")
+            return
 
-        langfuse_handler.langfuse.score(
+        langfuse_client.create_score(         
             trace_id=trace_id,
             name="agent_a_score",
             value=final_state.get("debate1_agent_a_score", 5) / 10,
             comment=f"Judge score for Agent A — winner: {final_state.get('debate1_winner')}",
         )
-        langfuse_handler.langfuse.score(
+        langfuse_client.create_score(      
             trace_id=trace_id,
             name="agent_b_score",
             value=final_state.get("debate1_agent_b_score", 5) / 10,
             comment=f"Judge score for Agent B — stack: {final_state.get('debate1_winning_stack')}",
         )
-        langfuse_handler.langfuse.score(
+        langfuse_client.create_score(          
             trace_id=trace_id,
             name="debate_rounds",
             value=final_state.get("debate1_rounds", 1),
             comment="Number of rounds needed to reach consensus",
         )
+        langfuse_client.flush()        
         print("📊 Scores sent to Langfuse")
     except Exception as e:
         print(f"⚠️  Langfuse scoring failed: {e}")
