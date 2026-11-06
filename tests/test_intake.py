@@ -1,58 +1,89 @@
-# test_intake.py
-import pytest
-from unittest.mock import MagicMock, patch
-from agents.intake import intake_node
+from __future__ import annotations
 
-@patch("agents.intake.get_llm")
-def test_intake_full_input(mock_get_llm):
-    # Setup mock response for Case 1
-    mock_llm = MagicMock()
-    mock_get_llm.return_value = mock_llm
-    mock_response = MagicMock()
-    mock_response.content = '{"goal": "chat app", "timeline": "3 weeks", "team_size": 2, "constraints": [], "stack": "Firebase", "methodology": null}'
-    mock_llm.invoke.return_value = mock_response
+import json
 
-    state = {
-        "raw_input": "Build a chat app in 3 weeks with 2 devs using Firebase",
-        "project_context": None,
-        "user_provided_fields": None
+from agents.intake import (
+    ProjectContext,
+    detect_user_provided,
+    extract_context,
+    make_intake_node,
+)
+from tests.helpers import fake_model
+
+FULL = json.dumps(
+    {
+        "goal": "chat app",
+        "timeline": "3 weeks",
+        "team_size": 2,
+        "constraints": [],
+        "stack": "Firebase",
+        "methodology": None,
     }
-    
-    # CASE 1: Full input, should not interrupt
-    result = intake_node(state)
-    
+)
+
+def test_extract_context_uses_the_schema():
+    context = extract_context("Build a chat app", llm=fake_model(FULL))
+
+    assert context["goal"] == "chat app"
+    assert context["team_size"] == 2
+    assert context["constraints"] == []
+
+def test_extraction_tolerates_prose_and_fences():
+    raw = f"Here you go:\n```json\n{FULL}\n```"
+    assert extract_context("x", llm=fake_model(raw))["goal"] == "chat app"
+
+def test_project_context_normalises_sloppy_values():
+    context = ProjectContext.model_validate(
+        {
+            "goal": "  ",
+            "timeline": None,
+            "team_size": "solo",
+            "constraints": "must use SSO",
+            "stack": "",
+        }
+    ).model_dump()
+
+    assert context["goal"] is None
+    assert context["team_size"] is None
+    assert context["constraints"] == ["must use SSO"]
+    assert context["stack"] is None
+
+def test_intake_does_not_interrupt_when_context_is_complete():
+    node = make_intake_node(llm=fake_model(FULL))
+    result = node({"raw_input": "Build a chat app in 3 weeks with 2 devs using Firebase"})
+
     assert result["project_context"]["goal"] == "chat app"
-    assert result["project_context"]["team_size"] == 2
-    assert result["user_provided_fields"]["goal"] is True
-    assert result["user_provided_fields"]["team_size"] is True
+    assert result["user_provided_fields"]["stack"] is True
+    assert result["current_node"] == "intake_node"
 
-@patch("agents.intake.interrupt")
-@patch("agents.intake.get_llm")
-def test_intake_missing_input_interruption(mock_get_llm, mock_interrupt):
-    # Mock sequence: 
-    # 1. First extraction finds missing goal/timeline/team_size
-    # 2. User provides answer via interrupt
-    # 3. Second extraction finds everything
-    mock_llm = MagicMock()
-    mock_get_llm.return_value = mock_llm
-    
-    res1 = MagicMock()
-    res1.content = '{"goal": null, "timeline": null, "team_size": null}'
-    
-    res2 = MagicMock()
-    res2.content = '{"goal": "web app", "timeline": "1 month", "team_size": 1}'
-    
-    mock_llm.invoke.side_effect = [res1, res2]
-    mock_interrupt.return_value = "It is a web app for 1 dev in 1 month"
+def test_intake_interrupts_then_reextracts(monkeypatch):
+    answers = iter(["It is a web app for 1 dev in 1 month"])
+    monkeypatch.setattr("agents.intake.interrupt", lambda message: next(answers))
 
-    state = {
-        "raw_input": "Help me plan",
-        "project_context": None,
-        "user_provided_fields": None
-    }
-    
-    result = intake_node(state)
-    
-    assert mock_interrupt.called
+    node = make_intake_node(
+        llm=fake_model(
+            '{"goal": null, "timeline": null, "team_size": null}',
+            '{"goal": "web app", "timeline": "1 month", "team_size": 1}',
+        )
+    )
+    result = node({"raw_input": "Help me plan"})
+
     assert result["project_context"]["goal"] == "web app"
     assert result["user_provided_fields"]["goal"] is True
+
+def test_intake_applies_defaults_after_max_attempts(monkeypatch):
+    monkeypatch.setattr("agents.intake.interrupt", lambda message: "still vague")
+    node = make_intake_node(llm=fake_model("{}", "{}", "{}"))
+
+    result = node({"raw_input": "plan something"})
+
+    assert result["project_context"]["goal"] == "undefined project"
+    assert result["project_context"]["timeline"] == "undefined"
+    assert result["project_context"]["team_size"] == 1
+    assert detect_user_provided(result["project_context"]) == {
+        "goal": False,
+        "timeline": False,
+        "team_size": True,
+        "stack": False,
+        "methodology": False,
+    }

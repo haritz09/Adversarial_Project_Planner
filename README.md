@@ -1,113 +1,129 @@
-# Adversarial Project Planner 
+# Adversarial Project Planner
 
-Adversarial Project Planner is a multi-agent AI system built with **LangGraph** that transforms a vague project description into a structured, production-ready project plan. It uses an "adversarial debate" pattern to stress-test technical decisions before generating the final documentation in Notion.
+A multi-agent planner built with **LangGraph**. It takes a vague project idea,
+runs an adversarial debate to stress-test the technical decision, and writes a
+structured project plan. The debate is a reusable subgraph and the export
+destination is a pluggable sink, so neither the models nor the target page
+(Notion, Markdown, Obsidian) are hardcoded into the pipeline.
 
-## Pipeline Overview
+## Pipeline
 
-The system follows a sophisticated pipeline to ensure high-quality project planning:
+```text
+intake_node -> prepare_debates -> debate_tech_stack -> architecture_generator
+  -> scope_generator -> plan_generator -> debate_flow_generator -> export_node
+```
 
-1.  **Intake Agent**: Extracts project goals, timelines, and constraints. Uses Human-in-the-loop (HITL) interrupts to ask for missing information.
-2.  **Adversarial Debate**: Two agents (`llama-3.1-8b`) debate technical architecture and trade-offs. The debate takes into account your specific project constraints. However, if a constraint is technically unsound or suboptimal, the agents will challenge it, potentially discarding it in favor of a better alternative while providing a clear explanation of why.
-3.  **The Judge**: Another model (`llama-3.3-70b-versatile`) evaluates the debate, decides on the winning stack, or orders another round if more clarity is needed.
-4.  **Content Generation**: Specialized generators (`gemini-2.5-flash`) create detailed architectural, scope, and plan documentation based on the debate's outcome.
-5.  **Multi-Page Notion Export**: The results are automatically written to a structured workspace in Notion.
+1. **Intake** extracts goal, timeline, team size and constraints. When
+   something essential is missing it pauses with a LangGraph `interrupt()` and
+   asks for it.
+2. **Adversarial debate** is compiled per config (`core/engine.py`). Agent A
+   proposes, Agent B challenges, and a judge either picks a winner or orders
+   another round. Two rounds are guaranteed, three at most.
+3. **Generators** turn the winning decision and the transcript into Markdown
+   documents: architecture, scope, plan and debate flow.
+4. **Export** writes the same document tree to any registered sink.
 
-![Graph Structure](langgraph_graph.png)
+The engine knows nothing about project planning: a `DebateConfig` goes in and a
+`DebateResult` comes out in `state["debates"]`.
 
-## LLM selection
+## Export destinations
 
-| Phase | Model | Reason |
+| Sink | When it is used | Output |
 | :--- | :--- | :--- |
-| **Debaters** | `llama-3.1-8b-instant` | **Speed & Agility**: We need fast responses for iterative debate rounds without sacrificing basic reasoning. |
-| **Judge** | `llama-3.3-70b-versatile` | **Authority**: A more powerful llm that has the authority to decide which agent won the debate. |
-| **Generators** | `gemini-2.5-flash` | **Large Context**: Ideal for synthesizing the entire debate history and project context into long-form documentation. |
+| `auto` (default) | Notion if configured, otherwise Markdown | — |
+| `markdown` | Zero configuration | `output/<run>/` with numbered `.md` files and `INDEX.md` |
+| `obsidian` | Vault users | Markdown with frontmatter and `[[wikilinks]]` |
+| `notion` | `NOTION_TOKEN` + `NOTION_PARENT_PAGE_ID` | Page tree with the same hierarchy |
+
+`auto` falls back to Markdown if a Notion export fails at runtime, so generated
+documents are never lost. An explicit `--sink notion` reports the error instead.
+
+Adding a destination means implementing `export()` in `sinks/` and registering
+it in `sinks/registry.py`; the pipeline does not change. Importing the package
+never imports `mcp` or requires credentials.
+
+## Models
+
+Every seat is configurable with a `provider:model` value:
+
+| Variable | Default |
+| :--- | :--- |
+| `PLANNER_MODEL_INTAKE` | falls back to `PLANNER_MODEL_DEBATER` |
+| `PLANNER_MODEL_DEBATER` | `groq:llama-3.1-8b-instant` |
+| `PLANNER_MODEL_DEBATER_A` / `PLANNER_MODEL_DEBATER_B` | `PLANNER_MODEL_DEBATER` |
+| `PLANNER_MODEL_JUDGE` | `groq:llama-3.3-70b-versatile` |
+| `PLANNER_MODEL_GENERATOR` | `google_genai:gemini-2.5-flash` |
+
+Registered providers: `groq`, `google_genai` and `openai`. A new provider is one
+factory function in `core/llm.py`; models are built lazily and cached, so no key
+is needed until a model is actually invoked.
 
 ## Installation
 
-1.  **Clone the repository**:
-    ```bash
-    git clone 
-    cd Adversarial_Project_Planner
-    ```
+```bash
+git clone <repo>
+cd Adversarial_Project_Planner
+python -m venv venv
+# Windows
+.\venv\Scripts\activate
+# macOS / Linux
+source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+```
 
-2.  **Set up the environment**:
-    Create a `.env` file from the provided example:
-    ```bash
-    cp .env.example .env
-    ```
-    Fill in your API keys for Groq, Google (Gemini), Notion, and Langfuse.
+Python 3.10+. Only the providers you use need keys:
 
-3.  **Install dependencies**:
-    ```bash
-    # Create a virtual environment
-    python -m venv venv
+- `GROQ_API_KEY` for the default debaters and judge.
+- `GOOGLE_API_KEY` for the default generators.
+- `NOTION_TOKEN` + `NOTION_PARENT_PAGE_ID` only for Notion export.
+- `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY` only for tracing.
 
-    # Activate it (Windows)
-    .\venv\Scripts\activate
-    # OR Activate it (Mac/Linux)
-    source venv/bin/activate
-
-    pip install -r requirements.txt
-    ```
-
-## Requirements
-
-- Python 3.10+
-- **Groq API Key** (for Llama models)
-- **Google AI API Key** (for Gemini)
-- **Notion Integration Token** and a Parent Page ID.
-- **Langfuse Account**.
+Nothing is validated at import time: `python main.py --help` works with no
+`.env` at all.
 
 ## Usage
 
-Run the main script to start the interactive planner:
+```bash
+python main.py --describe "Build a real-time chat app in 3 weeks with 2 devs"
+python main.py --sink markdown --output-dir output
+python main.py --sink obsidian --output-dir vault
+python main.py --no-trace
+```
+
+If `--describe` is omitted the CLI prompts for a description. Missing intake
+details are asked interactively.
+
+## Observability
+
+Langfuse is optional. With keys present, every run is traced, and after each
+debate the judge scores are sent against the **same trace id** the callback
+handler exported. `--no-trace` or a missing key disables it without affecting
+the run.
+
+## Tests
 
 ```bash
-python main.py
+pytest -q          # offline: fake models, no credentials, no network
+ruff check .
 ```
 
-The intake agent will prompt you for details. If mandatory information (like timeline or goal) is missing, it will pause and ask for clarification.
+The suite covers the engine contract (rounds, max-rounds override, fallback
+verdicts, skip), a second `DebateConfig` proving genericity, the sink contract
+and its fallback, intake HITL, model configuration and a full graph smoke run
+that writes real Markdown to a temporary directory.
 
-## Langfuse: Observability & Scoring
-
-**Langfuse** is used for full-stack observability. 
-- **Tracing**: Every run is traced with the `CallbackHandler`. You can view the entire decision tree, LLM latency, and token usage.
-- **Manual Scoring**: After each debate, the system automatically sends scores to Langfuse to evaluate the quality of Agent A and Agent B's arguments, as well as the number of rounds required to reach a consensus.
-- **Session Grouping**: Traces are grouped by `session_id` (derived from the project name) for easy analysis of multiple iterations.
-
-## Expected Outcome
-
-The planner automatically creates a hierarchy of pages in your Notion workspace:
+## Output
 
 ```text
-📁 [Project Name] — Adversarial Planner
-├──  1. Architectural Overview  
-│   ├──  Chosen Stack  
-│   ├──  System Components  
-│   ├──  Key Architectural Decisions  
-│   └──  Risks & Mitigations  
-├──  2. Scope & Objectives  
-│   ├──  Objectives  
-│   ├──  MVP Definition  
-│   ├──  Out of Scope  
-│   └──  Success Criteria  
-├──  3. Project Plan  
-│   └──  3.1 Full Plan  
-│       ├──  Phases  
-│       ├──  Milestones (table)  
-│       ├──  Time Estimates (table)  
-│       └──  Risks (table)  
-└──  4. Debate Flow  
-    ├──  Debate Flow  
-    ├──  Round 1  
-    │   ├──  Agent A arguments  
-    │   └──  Agent B arguments 
-        |_____ Judge Decision (It will ask for another round)
-    ├──  Round 2  
-    │   ├──  Agent A arguments  
-    │   └──  Agent B  
-    └──  Judge Decision (winner: A, B or tie)
+output/<run-id>/
+├── INDEX.md
+├── 01-architectural-overview.md
+├── 02-scope-objectives.md
+├── 03-1-full-plan.md
+└── 04-debate-flow.md
 ```
 
-
-
+Notion receives the same tree: root page, `1. Architectural Overview`,
+`2. Scope & Objectives`, `3. Project Plan` → `3.1 Full Plan`, and
+`4. Debate Flow`.

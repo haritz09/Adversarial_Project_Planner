@@ -1,139 +1,84 @@
-# agents/intake.py
-import json
-import re
-import os
-from langchain_groq import ChatGroq
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Any
+
 from langgraph.types import interrupt
-from graph.state import DebateState
-from dotenv import load_dotenv
+from pydantic import BaseModel, ConfigDict, field_validator
 
-load_dotenv()
-
-# We initialize the LLM. 
-# In production it uses environmental variables, in tests it is patched.
-def get_llm():
-    return ChatGroq(model="llama-3.1-8b-instant")
+from core.json_utils import message_text, parse_json_object
+from core.llm import ModelResolver, PlannerModels, resolve_model
+from core.prompt_loader import render_prompt
 
 REQUIRED_FIELDS = ["goal", "timeline", "team_size"]
+MAX_INTERRUPT_ATTEMPTS = 3
 
-FIELD_DEFAULTS = {
+FIELD_DEFAULTS: dict[str, Any] = {
     "team_size": 1,
     "timeline": "undefined",
     "goal": "undefined project",
 }
 
-EXTRACT_PROMPT = """
-Extract the following fields from the project description as a JSON object.
-If a field is not mentioned, set it to null.
+class ProjectContext(BaseModel):
 
-Fields:
-- goal: what the project builds (string)
-- timeline: how long it takes (string, e.g. "3 weeks", "2 months")
-- team_size: number of developers (integer or null)
-- constraints: list of explicit constraints mentioned (list of strings, empty list if none)
-- stack: technology stack if explicitly mentioned (string or null)
-- methodology: delivery approach if explicitly mentioned, e.g. "scrum", "kanban" (string or null)
+    model_config = ConfigDict(extra="ignore")
 
-Example output:
-{{"goal": "real-time chat app", "timeline": "3 weeks", "team_size": 2, "constraints": ["must use existing auth system"], "stack": "Firebase", "methodology": null}}
+    goal: str | None = None
+    timeline: str | None = None
+    team_size: int | None = None
+    constraints: list[str] = []
+    stack: str | None = None
+    methodology: str | None = None
 
-Project description:
-{raw_input}
+    @field_validator("goal", "timeline", "stack", "methodology", mode="before")
+    @classmethod
+    def _empty_to_none(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
 
-Return ONLY the JSON object. No explanation, no markdown, no code fences.
-"""
-
-MAX_INTERRUPT_ATTEMPTS = 3
-
-
-def _parse_json(text: str) -> dict | None:
-    """Try to parse JSON from LLM response, with tolerant fallback."""
-    if not isinstance(text, str):
-        text = str(text)
-
-    # Direct parse
-    try:
-        return json.loads(text)
-    except Exception:
-        pass
-
-    # Extract first JSON object found in the text
-    m = re.search(r"\{[\s\S]*\}", text)
-    if m:
+    @field_validator("team_size", mode="before")
+    @classmethod
+    def _coerce_team_size(cls, value: Any) -> Any:
+        if value is None or value == "":
+            return None
         try:
-            return json.loads(m.group(0))
-        except Exception:
-            pass
+            return int(str(value).strip().split()[0])
+        except (TypeError, ValueError, IndexError):
+            return None
 
-    return None
+    @field_validator("constraints", mode="before")
+    @classmethod
+    def _coerce_constraints(cls, value: Any) -> list[str]:
+        if not value:
+            return []
+        if isinstance(value, str):
+            return [value.strip()] if value.strip() else []
+        return [str(item).strip() for item in value if str(item).strip()]
 
+def extract_context(raw_input: str, llm: Any | None = None) -> dict[str, Any]:
+    model = llm or resolve_model(PlannerModels.from_env().intake)
+    message = model.invoke(render_prompt("intake/extraction.md", raw_input=raw_input))
+    data = parse_json_object(message_text(message)) or {}
+    return ProjectContext.model_validate(data).model_dump()
 
-def _normalize(context: dict) -> dict:
-    """Ensure all expected keys exist and types are correct."""
-    context.setdefault("goal", None)
-    context.setdefault("timeline", None)
-    context.setdefault("team_size", None)
-    context.setdefault("constraints", [])
-    context.setdefault("stack", None)
-    context.setdefault("methodology", None)
-
-    # Normalize constraints: always a list
-    if context["constraints"] is None:
-        context["constraints"] = []
-
-    # Normalize team_size: must be int or None
-    if context["team_size"] is not None:
-        try:
-            context["team_size"] = int(context["team_size"])
-        except (ValueError, TypeError):
-            context["team_size"] = None
-
-    # Normalize empty strings to None
-    for key in ["goal", "timeline", "stack", "methodology"]:
-        if context.get(key) == "":
-            context[key] = None
-
-    return context
-
-
-def extract_context(raw_input: str) -> dict:
-    """Call the LLM to extract structured project context from free text."""
-    llmInst = get_llm()
-    response = llmInst.invoke(EXTRACT_PROMPT.format(raw_input=raw_input))
-
-    # Normalize LLM response to string
-    text = response.content if hasattr(response, "content") else str(response)
-    if isinstance(text, list):
-        first = text[0]
-        text = first.get("text", str(first)) if isinstance(first, dict) else str(first)
-
-    result = _parse_json(text)
-    if result is None:
-        result = {}
-
-    return _normalize(result)
-
-
-def check_missing(context: dict) -> list[str]:
-    """Return list of required fields that are missing or null."""
+def check_missing(context: Mapping[str, Any]) -> list[str]:
     return [
-        f for f in REQUIRED_FIELDS
-        if context.get(f) is None or context.get(f) == ""
+        field
+        for field in REQUIRED_FIELDS
+        if context.get(field) is None or context.get(field) == ""
     ]
 
-
-def apply_defaults(context: dict, missing: list[str]) -> dict:
-    """Apply safe defaults for fields that are still missing after max interrupts."""
+def apply_defaults(context: dict[str, Any], missing: list[str]) -> dict[str, Any]:
     for field in missing:
         context[field] = FIELD_DEFAULTS.get(field, "undefined")
     return context
 
-
-def detect_user_provided(context: dict) -> dict:
-    """Track which fields were explicitly provided by the user."""
-    def provided(k: str) -> bool:
-        v = context.get(k)
-        return v is not None and v != "" and v != "undefined" and v != "undefined project"
+def detect_user_provided(context: Mapping[str, Any]) -> dict[str, bool]:
+    def provided(key: str) -> bool:
+        value = context.get(key)
+        return value is not None and value not in ("", "undefined", "undefined project")
 
     return {
         "goal": provided("goal"),
@@ -143,54 +88,44 @@ def detect_user_provided(context: dict) -> dict:
         "methodology": provided("methodology"),
     }
 
-
 def _build_interrupt_message(missing: list[str], attempt: int) -> str:
-    """Build a user-friendly clarification message."""
-    field_questions = {
-        "goal": "What does the project build? (e.g. 'a real-time chat app', 'an e-commerce platform')",
+    questions = {
+        "goal": "What does the project build? (e.g. 'a real-time chat app')",
         "timeline": "What is the expected timeline? (e.g. '3 weeks', '2 months')",
         "team_size": "How many developers will work on this? (e.g. '1', '2', 'solo')",
     }
-
     if attempt == 1:
         header = "I need a bit more context before we start:\n"
     else:
-        header = f"I still need the following information (attempt {attempt}/{MAX_INTERRUPT_ATTEMPTS}):\n"
+        header = (
+            f"I still need the following information "
+            f"(attempt {attempt}/{MAX_INTERRUPT_ATTEMPTS}):\n"
+        )
+    return header + "\n".join(f"- {questions.get(f, f)}" for f in missing)
 
-    questions = "\n".join(f"- {field_questions.get(f, f)}" for f in missing)
-    return header + questions
+def make_intake_node(llm: Any | None = None, resolver: ModelResolver | None = None):
 
+    def intake_node(state: Mapping[str, Any]) -> dict[str, Any]:
+        model = llm or resolve_model(PlannerModels.from_env().intake, resolver)
+        accumulated = state["raw_input"]
+        context = extract_context(accumulated, llm=model)
 
-def intake_node(state: DebateState) -> dict:
-    """
-    First node in the pipeline.
-    - Extracts structured project_context from raw_input.
-    - Interrupts to ask the user for missing required fields (up to MAX_INTERRUPT_ATTEMPTS).
-    - Applies safe defaults if fields are still missing after max attempts.
-    - Detects which fields were user-provided vs inferred.
-    """
-    accumulated_input = state["raw_input"]
-    context = extract_context(accumulated_input)
+        for attempt in range(1, MAX_INTERRUPT_ATTEMPTS + 1):
+            missing = check_missing(context)
+            if not missing:
+                break
+            if attempt == MAX_INTERRUPT_ATTEMPTS:
+                context = apply_defaults(context, missing)
+                break
 
-    for attempt in range(1, MAX_INTERRUPT_ATTEMPTS + 1):
-        missing = check_missing(context)
+            answer = interrupt(_build_interrupt_message(missing, attempt))
+            accumulated = f"{accumulated}\n{answer}"
+            context = extract_context(accumulated, llm=model)
 
-        if not missing:
-            break
+        return {
+            "project_context": context,
+            "user_provided_fields": detect_user_provided(context),
+            "current_node": "intake_node",
+        }
 
-        if attempt == MAX_INTERRUPT_ATTEMPTS:
-            # Last attempt: apply defaults and continue rather than interrupting again
-            context = apply_defaults(context, missing)
-            break
-
-        # Interrupt and wait for user response
-        answer = interrupt(_build_interrupt_message(missing, attempt))
-
-        # Accumulate all context so the LLM has the full picture on re-extraction
-        accumulated_input = accumulated_input + "\n" + answer
-        context = extract_context(accumulated_input)
-
-    return {
-        "project_context": context,
-        "user_provided_fields": detect_user_provided(context),
-    }
+    return intake_node
