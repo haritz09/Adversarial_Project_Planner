@@ -1,8 +1,7 @@
-# tests/test_notion.py
-from tools.notion import markdown_to_blocks
+import sys
 
+from sinks.notion import markdown_to_blocks
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def types_of(blocks):
     return [b["type"] for b in blocks]
@@ -10,9 +9,6 @@ def types_of(blocks):
 def text_of(block):
     key = block["type"]
     return block[key]["rich_text"][0]["text"]["content"]
-
-
-# ── Clean input tests ─────────────────────────────────────────────────────────
 
 def test_heading_1():
     blocks = markdown_to_blocks("# Hello")
@@ -82,7 +78,7 @@ def test_table_basic():
     blocks = markdown_to_blocks(md)
     assert blocks[0]["type"] == "table"
     assert blocks[0]["table"]["table_width"] == 2
-    assert blocks[0]["table"]["has_column_header"] == True
+    assert blocks[0]["table"]["has_column_header"]
     print("✅ basic table")
 
 def test_table_three_columns():
@@ -105,11 +101,7 @@ def test_mixed_content():
     ]
     print("✅ mixed clean content")
 
-
-# ── Dirty / realistic LLM output tests ───────────────────────────────────────
-
 def test_introductory_text_before_heading():
-    """LLMs often add a preamble before the first heading."""
     md = "Here is the architectural overview for your project.\n\n## Chosen Stack\n- React\n- Firebase"
     blocks = markdown_to_blocks(md)
     assert blocks[0]["type"] == "paragraph"
@@ -118,16 +110,14 @@ def test_introductory_text_before_heading():
     print("✅ introductory text before heading")
 
 def test_bold_inline_stripped_to_text():
-    """LLMs use **bold** inside paragraphs — parser should not crash."""
     md = "The team will use **React** with **Firebase** for the following reasons:"
     blocks = markdown_to_blocks(md)
     assert blocks[0]["type"] == "paragraph"
-    # bold markers are kept as-is in plain text (no crash)
+
     assert "React" in text_of(blocks[0])
     print("✅ bold inline does not crash parser")
 
 def test_table_with_alignment_markers():
-    """Notion tables sometimes have :---: alignment syntax in separator rows."""
     md = "| Risk | Prob | Impact |\n|:---|:---:|:---:|\n| OAuth | Medium | High |"
     blocks = markdown_to_blocks(md)
     assert blocks[0]["type"] == "table"
@@ -135,7 +125,6 @@ def test_table_with_alignment_markers():
     print("✅ table with alignment markers in separator")
 
 def test_table_with_extra_spaces():
-    """LLMs sometimes pad table cells inconsistently."""
     md = "|  Task  |  Phase  |  Effort  |\n|---|---|---|\n|  Setup  |  1  |  2-4h  |"
     blocks = markdown_to_blocks(md)
     assert blocks[0]["type"] == "table"
@@ -144,25 +133,21 @@ def test_table_with_extra_spaces():
     print("✅ table cells with extra spaces are stripped")
 
 def test_table_with_empty_cells():
-    """Tables with missing cells in some rows should not crash."""
     md = "| A | B | C |\n|---|---|---|\n| 1 | 2 |"
     blocks = markdown_to_blocks(md)
     assert blocks[0]["type"] == "table"
     assert blocks[0]["table"]["table_width"] == 3
 
-    # children[0] is the header row (A, B, C)
     header_cells = blocks[0]["table"]["children"][0]["table_row"]["cells"]
     assert len(header_cells) == 3
     assert header_cells[0][0]["text"]["content"] == "A"
 
-    # children[1] is the data row — should be padded to width 3
     data_cells = blocks[0]["table"]["children"][1]["table_row"]["cells"]
     assert len(data_cells) == 3
     assert data_cells[2][0]["text"]["content"] == ""
     print("✅ table with missing cells padded correctly")
 
 def test_blockquote_treated_as_paragraph():
-    """LLMs sometimes add > blockquotes — parser should not crash."""
     md = "> Note: OAuth integration may require additional time."
     blocks = markdown_to_blocks(md)
     assert len(blocks) == 1
@@ -170,14 +155,12 @@ def test_blockquote_treated_as_paragraph():
     print("✅ blockquote treated as paragraph without crash")
 
 def test_heading_with_trailing_spaces():
-    """LLMs sometimes add trailing whitespace after headings."""
     md = "## Title with trailing spaces   "
     blocks = markdown_to_blocks(md)
     assert text_of(blocks[0]) == "Title with trailing spaces"
     print("✅ heading trailing spaces stripped")
 
 def test_consecutive_code_blocks():
-    """Two code blocks back to back."""
     md = "```python\ncode_a()\n```\n```mermaid\ngraph TD\nA-->B\n```"
     blocks = markdown_to_blocks(md)
     assert len(blocks) == 2
@@ -186,7 +169,6 @@ def test_consecutive_code_blocks():
     print("✅ consecutive code blocks")
 
 def test_unclosed_code_block():
-    """LLM forgets to close a code block — parser should not crash."""
     md = "```python\nsome code without closing fence"
     blocks = markdown_to_blocks(md)
     assert blocks[0]["type"] == "code"
@@ -194,7 +176,6 @@ def test_unclosed_code_block():
     print("✅ unclosed code block handled without crash")
 
 def test_multiple_tables_in_document():
-    """Documents often have multiple separate tables."""
     md = (
         "| A | B |\n|---|---|\n| 1 | 2 |\n\n"
         "Some text in between.\n\n"
@@ -208,7 +189,6 @@ def test_multiple_tables_in_document():
     print("✅ multiple tables in same document")
 
 def test_full_realistic_llm_output():
-    """Simulates a realistic messy LLM architecture doc output."""
     md = """\
 Here is the architectural overview based on the debate conclusions.
 
@@ -257,16 +237,13 @@ graph TD
     assert len(blocks) > 10
     print(f"✅ full realistic LLM output parsed ({len(blocks)} blocks)")
 
-
-# ── Runner ────────────────────────────────────────────────────────────────────
-
 ALL_TESTS = [
     test_heading_1, test_heading_2, test_heading_3,
     test_bullet_dash, test_bullet_asterisk, test_numbered_list,
     test_paragraph, test_code_block_python, test_code_block_mermaid,
     test_code_block_unknown_language, test_table_basic,
     test_table_three_columns, test_empty_lines_ignored, test_mixed_content,
-    # dirty inputs
+
     test_introductory_text_before_heading,
     test_bold_inline_stripped_to_text,
     test_table_with_alignment_markers,

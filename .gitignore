@@ -17,4 +17,8 @@ env/
 # Pytest
 .pytest_cache/
 
+# Generated exports
+output/
+vault/
+
 run_test_notion.py
