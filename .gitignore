@@ -1,5 +1,6 @@
 .env
 AGENT_CONTEXT.md
+models.toml
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

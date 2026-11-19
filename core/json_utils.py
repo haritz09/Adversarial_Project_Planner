@@ -6,6 +6,38 @@ from typing import Any
 
 _JSON_BLOCK = re.compile(r"\{[\s\S]*\}")
 
+
+def last_json_object(text: str) -> str | None:
+    """Return the last balanced ``{...}`` object, ignoring braces in strings."""
+    depth = 0
+    start = -1
+    found: str | None = None
+    in_string = False
+    escaped = False
+
+    for index, char in enumerate(text):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            if depth == 0:
+                start = index
+            depth += 1
+        elif char == "}" and depth:
+            depth -= 1
+            if depth == 0 and start != -1:
+                found = text[start : index + 1]
+
+    return found
+
+
 def parse_json_object(text: Any) -> dict[str, Any] | None:
     if not isinstance(text, str):
         text = str(text)
@@ -17,6 +49,9 @@ def parse_json_object(text: Any) -> dict[str, Any] | None:
     block = _JSON_BLOCK.search(text)
     if block:
         candidates.append(block.group(0))
+    trailing = last_json_object(text)
+    if trailing:
+        candidates.append(trailing)
 
     for candidate in candidates:
         try:

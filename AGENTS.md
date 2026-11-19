@@ -1,76 +1,62 @@
 # AGENTS.md
 
-Verified notes for OpenCode sessions. Trust the code over this file when they
-disagree, and update this file when you change the architecture.
+Verified notes. Trust the code over this file when they disagree, and update it
+when you change the architecture. The **why** behind each choice lives in
+`MEMORY.md`; this file is only the **what** and **how**.
 
-## What this repo is
+## Two apps, one engine
 
-A LangGraph pipeline that turns a vague project description into a Markdown or
-Notion project plan. The adversarial debate is a **reusable subgraph**; the
-planning domain (tech stack, architecture, scope, plan) lives outside it.
+- **Planner** (`main.py`, `graph/`, `agents/`) — description -> plan. Implemented.
+- **Reviewer** (`review.py`, `review/`) — release gate over a repo, its container
+  and a running app. **Planned, not implemented.**
 
-```text
-intake_node -> prepare_debates -> debate_tech_stack (subgraph) ->
-architecture_generator -> scope_generator -> plan_generator ->
-debate_flow_generator -> export_node -> END
-```
-
-`debate_tech_stack` is the compiled subgraph:
+The adversarial debate is a reusable subgraph (`core/engine.py`). The reviewer is
+a second consumer of it, never a node inside the planner graph.
 
 ```text
-[skip]  (only when the config defines skip_when)
-debater_a -> debater_b -> judge -> debater_a (another round)
-                               \-> END
+intake -> prepare_debates -> debate_tech_stack -> architecture -> scope -> plan
+       -> debate_flow -> export
+debate_tech_stack: [skip] debater_a -> debater_b -> judge -> debater_a | END
 ```
 
-The parent graph is linear. The loop lives inside the subgraph.
+Boundary (enforce with an AST import test): `core/`, `sinks/` and
+`tools/export.py` never import `agents/`, `graph/` or `review/`; `review/`
+imports `core/` and `sinks/` only.
 
 ## Layout
 
 | Path | Responsibility |
 | :--- | :--- |
-| `main.py` | CLI: streaming with `subgraphs=True`, HITL resume, result printing |
-| `graph/pipeline.py` | Graph assembly; each `DebateConfig` becomes a node |
-| `graph/state.py` | `PlannerState`: `debate_inputs`, `debates`, `docs`, `export_config` |
-| `graph/document.py` | Maps `docs` to the sink-neutral `ProjectDocument` tree |
-| `agents/intake.py` | Extraction + `interrupt()` clarifications |
-| `agents/stack_debate.py` | The tech-stack `DebateConfig` (prompts, verdict, brief) |
-| `agents/generators.py` | Node factories for architecture/scope/plan and the debate-flow renderer |
-| `agents/generator_prompts.py` | Builders that fill the generator prompt templates |
-| `core/prompt_loader.py` | Loads/adds values to prompt files under `prompts/` |
-| `prompts/` | All prompt text: `debate/`, `tech_stack/`, `generators/`, `intake/` |
-| `core/engine.py` | `build_debate(cfg)` — the reusable debate subgraph |
+| `main.py` | CLI, streaming with `subgraphs=True`, HITL resume |
+| `graph/` | `pipeline.py` (assembly, one node per `DebateConfig`), `state.py`, `document.py` |
+| `agents/` | `intake.py`, `stack_debate.py`, `generators.py`, `generator_prompts.py` |
+| `core/engine.py` | `build_debate(cfg)` — the reusable subgraph |
 | `core/models.py` | `DebateConfig`, `BaseVerdict`, `DebateResult`, `RoleSpec` |
 | `core/llm.py` | `ModelSpec` (`provider:model`), provider registry, resolver |
-| `core/prompts.py`, `core/structured.py`, `core/usage.py`, `core/render.py` | Prompts, verdict parsing, token/cost, debate rendering |
+| `core/` (rest) | `prompts`, `structured` (verdict parsing), `usage` (cost), `render`, `prompt_loader` |
+| `prompts/` | All prompt text; no prose in Python |
 | `sinks/` | `base` contract, `markdown`, `obsidian`, `notion`, lazy `registry` |
 | `tools/export.py` | Export node + automatic Markdown fallback |
-| `observability.py` | Optional Langfuse trace and scores |
+| `observability.py` | Optional Langfuse |
+| `review/` *(planned)* | `cli`, `profile`, `models`, `lenses`, `gate`, `report`, `cache`, `brief/`, `probe/`, `lab/`, `frontend/` |
+| `core/cli/` | `provider.py` (the single CLI adapter), `config.py` (`models.toml` -> registry), `process.py` (timeout + tree kill), `check.py` (seat probe) |
 
-`core/`, `sinks/` and `tools/export.py` must not import `agents/` or planning
-concepts. Keep that boundary: it is what makes the engine reusable.
-
-## Setup and run
+## Run
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe main.py --describe "Build a chat app in 3 weeks with 2 devs"
 ```
 
-No `.env` is required at import time: Notion and Langfuse are configured lazily.
-A missing provider key fails only when that model is actually invoked.
-
-CLI flags: `--describe`, `--sink {auto,markdown,notion,obsidian}`,
-`--output-dir`, `--thread-id`, `--no-trace`.
-
-`auto` resolves to Notion when `NOTION_TOKEN`/`NOTION_CONNECTION_TOKEN` **and**
-`NOTION_PARENT_PAGE_ID` are set, otherwise Markdown. If an `auto` Notion export
-fails at runtime, the node logs and falls back to Markdown; an explicit
-`--sink notion` propagates the error.
+Flags: `--describe`, `--sink {auto,markdown,notion,obsidian}`, `--output-dir`,
+`--thread-id`, `--no-trace`. `auto` = Notion when `NOTION_TOKEN` (or
+`NOTION_CONNECTION_TOKEN`) and `NOTION_PARENT_PAGE_ID` are set, else Markdown; an
+`auto` failure falls back to Markdown, an explicit `--sink notion` raises.
+Nothing needs `.env` at import time; a missing key fails only when used.
 
 ## Models
 
-Seats are `provider:model` strings, overridable from the environment:
+Seats are `provider:model`; model names may contain colons.
 
 | Variable | Default |
 | :--- | :--- |
@@ -80,89 +66,97 @@ Seats are `provider:model` strings, overridable from the environment:
 | `PLANNER_MODEL_JUDGE` | `groq:llama-3.3-70b-versatile` |
 | `PLANNER_MODEL_GENERATOR` | `google_genai:gemini-2.5-flash` |
 
-Registered providers: `groq`, `google_genai`, `openai`. Add one with
-`@register_provider("name")` in `core/llm.py`; nothing else changes. Model
-names may contain colons (`openrouter:meta-llama/llama-3:free` parses correctly).
+Registered: `groq`, `google_genai`, `openai`. Add one with
+`@register_provider("name")` in `core/llm.py`.
+
+A seat needs `invoke(prompt) -> message(content, usage_metadata)`. Optional:
+`with_structured_output`; without it `core/structured.py` parses text as JSON.
+Nothing else — no function calling, no assumed context, no model name in prompts.
+
+**BYO providers (implemented):** one `cli` adapter runs *any* command-line
+agent; new agents are config, not code. `models.toml` (or `$MODELS_TOML`, or
+`--models`) declares providers; seats stay `provider:model`. `{model}` in `args`
+receives the model name, and the model `default` passes none. `prompt = "stdin"`
+(default) or `"arg"`; an empty `env` value removes a variable, which forces a
+subscription login even when an API key is exported. `openai_compatible` covers
+OpenRouter/Ollama/vLLM with no config at all (`OPENAI_BASE_URL` +
+`OPENAI_API_KEY`).
+
+The adapter reads plain stdout: no vendor JSON envelopes, so there is nothing to
+parse per vendor. `python -m core.cli.check` probes every seat and prints the
+configured `login` hint on failure. Subscription logins still do not survive
+headless CI except a long-lived token (`CLAUDE_CODE_OAUTH_TOKEN`).
 
 ## Debate semantics
 
-- `min_rounds` rounds are guaranteed **without calling the judge**: the judge
-  node short-circuits and orders another round.
-- From `min_rounds` on, the judge decides. `needs_another_round=True` loops.
-- At `max_rounds` the engine overrides `needs_another_round` and sets
+- `min_rounds` are guaranteed without calling the judge; from then on the judge
+  decides and `needs_another_round` loops.
+- At `max_rounds` the engine forces `needs_another_round=False` and
   `status="max_rounds"`.
-- Statuses: `decided`, `max_rounds`, `fallback` (unparseable judge output),
-  `skipped` (`skip_when` true, no model calls, `cost_usd=0`).
-- Verdicts are validated with Pydantic; scores are clamped to 0–10 and prose
-  or ```json fences around the object are tolerated.
-- Each debate writes `state["debates"][cfg.name]`; the subgraph shares the key
-  with the parent. Never re-introduce per-debate fields such as `debate1_*`.
+- Statuses: `decided`, `max_rounds`, `fallback` (unparseable judge), `skipped`
+  (`skip_when` true, no calls, cost 0).
+- Verdicts are Pydantic, scores clamped 0-10, prose and fences tolerated.
+- Results land in `state["debates"][cfg.name]`; never add per-debate fields.
 
-## Adding things
+## Reviewer (planned)
 
-**A new debate** (e.g. build-vs-buy):
+Release gate: `GO` / `CONDITIONAL` / `NO-GO` + `review.json`, `review.md`, exit
+`0/1/2/3`. One `DebateConfig` per lens, red -> blue -> judge, `min_rounds=1`,
+`max_rounds=2`; red investigates with tools, blue verifies, **the judge gets no
+tools**. Lenses: `security`, `reliability`, `correctness`, `cost_perf`, `general`,
+plus `frontend` only with `--url`.
 
-1. Create `agents/<name>_debate.py` exporting a `DebateConfig` with a unique
-   `name`, role prompts, judge rubric, `verdict_model` (subclass `BaseVerdict`)
-   and a `brief` callable.
-2. Optionally set `prepare_input` to publish domain data into
-   `state["debate_inputs"][name]`, and `evidence` for deterministic facts.
-3. Add it to `default_debates()` in `graph/pipeline.py` (or pass `configs=` in
-   tests). No new state fields, nodes or edges are needed.
+| Profile | Lab | Probing | Frontend | Max claim |
+| :--- | :--- | :--- | :--- | :--- |
+| `local` | no | refused | no | `GO (code-only)` |
+| `ci` | yes | yes | yes | `GO` |
 
-**A new sink** (e.g. Jira): implement `export(document, run_id) -> ExportResult`
-in `sinks/<name>.py`, then add the dotted path to `_FACTORIES` in
-`sinks/registry.py`. Do not import it from the pipeline.
-
-**A new document**: produce it into `state["docs"][slug]` and add the title in
-`graph/document.py`. Sinks render whatever hierarchy they receive.
+- Lab and active probing run **only** on an ephemeral Actions runner; the gate
+  carries `scope`, and a release check requires `full`.
+- Code first: authorization cells come from handlers/middleware, and only those
+  expected to `deny` are probed. No seeded tenants, no IDOR claim.
+- The model proposes a validated `ProbePlan`; a deterministic runner executes it
+  with caps (1 rps, burst 20, 300 requests, abort on 429 or >5% 5xx).
+- No production target: loopback/private only, else the run refuses.
+- Capacity is not measurable in the lab (`needs staging`, never a `NO-GO`).
+- The gate is deterministic; no model decides it.
 
 ## Prompts
 
-All prompt text lives in `prompts/` as Markdown: `debate/` for engine
-scaffolding, `tech_stack/` for this domain's roles and briefs, `generators/`
-for document generation, `intake/` for extraction. Python loads and fills them
-through `core/prompt_loader.py`:
-
-- `load_prompt("tech_stack/agent_b.md")` for static text.
-- `render_prompt("generators/plan.md", **values)` for templates.
-- `str.format` placeholders; literal braces must be doubled (`{{`).
-- Never inline prompt prose in a Python file. Add a new file under the matching
-  `prompts/` folder instead.
+All prompt text is Markdown under `prompts/` (`debate/`, `tech_stack/`,
+`generators/`, `intake/`, planned `review/`). `load_prompt(name)` for static text,
+`render_prompt(name, **values)` for `str.format` templates (double literal
+braces). Never inline prompt prose in Python.
 
 ## Tests
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q    
+.\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe -m ruff check .
 ```
 
-- `tests/conftest.py` strips provider credentials and disables Langfuse, so the
-  suite needs no `.env`, network or `npx`.
-- Fake models come from `tests/helpers.py` (`GenericFakeChatModel` with a
-  scripted response list). Running out of responses raises by design.
-- `tests/test_engine.py` is the engine contract; `tests/test_graph_smoke.py`
-  proves a second `DebateConfig` needs zero engine/graph changes;
-  `tests/test_sinks.py` covers the destination contract.
-- Tests marked `live` would call real providers and are deselected by
-  `pyproject.toml`; none are currently marked.
-- `pyproject.toml` owns pytest and ruff config. CI runs both on Python 3.11.
+`conftest.py` strips provider credentials and disables Langfuse, so the suite
+needs no `.env` or network. Fakes come from `tests/helpers.py`
+(`GenericFakeChatModel`; running out of scripted responses raises by design).
+`test_engine.py` is the engine contract, `test_graph_smoke.py` proves a new
+`DebateConfig` needs no engine change, `test_sinks.py` the sink contract. `live`
+tests are deselected; `pyproject.toml` owns pytest/ruff config; CI runs 3.11.
+The reviewer has **no tests yet** — treat it as unverified.
 
 ## Rules
 
-- `debate_flow_generator` is deterministic and runs **after** the generators;
-  it has no model call, so it cannot fail on missing credentials.
-- `graph/pipeline.py` must not build a module-level `graph = build_graph()`;
-  importing the module must stay credential-free.
-- Importing `sinks/notion.py` is safe; importing `mcp` happens inside export.
-  Notion export still shells out to `npx -y @notionhq/notion-mcp-server`.
-- Notion markdown conversion lives in `sinks/notion.py::markdown_to_blocks`.
-  Extend that parser instead of post-processing documents in agents.
-- Langfuse scores must reference the trace id created by `create_trace_id()`
-  and shared with `CallbackHandler(trace_context=...)`. Without keys the
-  session is disabled and the pipeline runs normally.
-- The `LangChainPendingDeprecationWarning` from
-  `langgraph.checkpoint.serde.encrypted` is a known upstream warning.
-- The CLI checkpointer is `MemorySaver`; `--thread-id` groups a run and names
-  the export folder. Interrupts are resumed with `Command(resume=answer)`.
-
+- `graph/pipeline.py` must not build a module-level graph; importing it stays
+  credential-free.
+- `debate_flow_generator` is deterministic and runs after the generators.
+- `sinks/notion.py` imports `mcp` lazily and shells out to
+  `npx -y @notionhq/notion-mcp-server`; markdown conversion lives in
+  `markdown_to_blocks`.
+- Langfuse scores reference the trace id from `create_trace_id()`; no keys means
+  a disabled session, not a failure.
+- `MemorySaver` is the CLI checkpointer; `--thread-id` groups a run and names the
+  export folder; resumes use `Command(resume=answer)`.
+- Adding a lens = a `DebateConfig` in `review/lenses.py` + a prompt file. No
+  engine change.
+- One adapter for all command-line agents. A new agent is a `models.toml` block,
+  never a Python class or a vendor branch in `core/cli/provider.py`.
+- `load_models_config()` runs in entrypoints only, never at import time.

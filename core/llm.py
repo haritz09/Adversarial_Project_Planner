@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from core.models import ModelLike
 
@@ -40,6 +40,7 @@ def register_provider(name: str) -> Callable[[ProviderFactory], ProviderFactory]
 def available_providers() -> list[str]:
     return sorted(_PROVIDERS)
 
+
 @register_provider("groq")
 def _groq(spec: ModelSpec):
     from langchain_groq import ChatGroq
@@ -70,6 +71,32 @@ def _openai(spec: ModelSpec):
         max_tokens=spec.max_tokens,
     )
 
+@register_provider("openai_compatible")
+def _openai_compatible(spec: ModelSpec):
+    from langchain_openai import ChatOpenAI
+
+    return ChatOpenAI(
+        model=spec.model,
+        temperature=spec.temperature,
+        max_tokens=spec.max_tokens,
+        base_url=os.environ.get("OPENAI_BASE_URL") or None,
+        api_key=os.environ.get("OPENAI_API_KEY") or None,
+    )
+
+@runtime_checkable
+class LLMProvider(Protocol):
+    """The whole model contract.
+
+    ``invoke`` is required. ``with_structured_output`` is optional: when a
+    provider lacks it, ``core/structured.py`` falls back to parsing the answer as
+    JSON text. Nothing else is assumed — no function calling, no context window,
+    no model family.
+    """
+
+    def invoke(self, prompt: str) -> Any:
+        ...
+
+
 @runtime_checkable
 class ModelResolver(Protocol):
     def resolve(self, spec: ModelSpec):
@@ -78,16 +105,20 @@ class ModelResolver(Protocol):
 class CachingResolver:
 
     def __init__(self, providers: Mapping[str, ProviderFactory] | None = None) -> None:
-        self._providers = dict(providers or _PROVIDERS)
+        self._providers = providers
         self._cache: dict[ModelSpec, object] = {}
+
+    @property
+    def _registry(self) -> Mapping[str, ProviderFactory]:
+        return self._providers if self._providers is not None else _PROVIDERS
 
     def resolve(self, spec: ModelSpec):
         if spec not in self._cache:
-            factory = self._providers.get(spec.provider)
+            factory = self._registry.get(spec.provider)
             if factory is None:
                 raise ValueError(
                     f"Unknown model provider {spec.provider!r}. "
-                    f"Available: {', '.join(sorted(self._providers))}"
+                    f"Available: {', '.join(sorted(self._registry))}"
                 )
             self._cache[spec] = factory(spec)
         return self._cache[spec]
