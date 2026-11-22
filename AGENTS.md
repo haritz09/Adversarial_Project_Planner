@@ -38,7 +38,7 @@ imports `core/` and `sinks/` only.
 | `sinks/` | `base` contract, `markdown`, `obsidian`, `notion`, lazy `registry` |
 | `tools/export.py` | Export node + automatic Markdown fallback |
 | `observability.py` | Optional Langfuse |
-| `review/` *(planned)* | `cli`, `profile`, `models`, `lenses`, `gate`, `report`, `cache`, `brief/`, `probe/`, `lab/`, `frontend/` |
+| `review/` | `models.py` (`Finding`, `ReviewVerdict`), `lenses.py`, `gate.py`. Planned: `cli`, `profile`, `report`, `brief/`, `probe/`, `lab/`, `frontend/` |
 | `core/cli/` | `provider.py` (the single CLI adapter), `config.py` (`models.toml` -> registry), `process.py` (timeout + tree kill), `check.py` (seat probe) |
 
 ## Run
@@ -119,7 +119,13 @@ plus `frontend` only with `--url`.
   with caps (1 rps, burst 20, 300 requests, abort on 429 or >5% 5xx).
 - No production target: loopback/private only, else the run refuses.
 - Capacity is not measurable in the lab (`needs staging`, never a `NO-GO`).
-- The gate is deterministic; no model decides it.
+- The gate is deterministic. Open critical always blocks;
+  `--fail-on` sets the lowest blocking severity. Below it, only high and medium
+  downgrade to CONDITIONAL: low and info never change the verdict.
+- The gate never reads the debate `winner` or scores, and a finding carries no
+  `blocker` flag: severity plus status is the whole contract.
+- A `code-only` scope with a probed lens (security, frontend) is CONDITIONAL at
+  best; `--strict` makes an unverified or unprobed lens a NO-GO.
 
 ## Prompts
 
@@ -139,9 +145,11 @@ braces). Never inline prompt prose in Python.
 needs no `.env` or network. Fakes come from `tests/helpers.py`
 (`GenericFakeChatModel`; running out of scripted responses raises by design).
 `test_engine.py` is the engine contract, `test_graph_smoke.py` proves a new
-`DebateConfig` needs no engine change, `test_sinks.py` the sink contract. `live`
-tests are deselected; `pyproject.toml` owns pytest/ruff config; CI runs 3.11.
-The reviewer has **no tests yet** — treat it as unverified.
+`DebateConfig` needs no engine change, `test_sinks.py` the sink contract.
+`test_review_gate.py` is the release-decision matrix and `test_review_boundary.py`
+keeps `review/` from importing the planner. `live` tests are deselected;
+`pyproject.toml` owns pytest/ruff config; CI runs 3.11. The rest of the reviewer
+is still unverified.
 
 ## Rules
 
@@ -157,6 +165,7 @@ The reviewer has **no tests yet** — treat it as unverified.
   export folder; resumes use `Command(resume=answer)`.
 - Adding a lens = a `DebateConfig` in `review/lenses.py` + a prompt file. No
   engine change.
+- One function, one job (SRP). A function that collects, normalizes and decides in the same body gets split: the public entry point orchestrates, each helper  does exactly one thing.
 - One adapter for all command-line agents. A new agent is a `models.toml` block,
   never a Python class or a vendor branch in `core/cli/provider.py`.
 - `load_models_config()` runs in entrypoints only, never at import time.

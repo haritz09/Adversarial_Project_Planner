@@ -177,6 +177,30 @@ Cost accepted: no per-vendor niceties (JSON envelopes, exact token counts, MCP
 flag translation). Those return later as opt-in fields on the same config block,
 not as new adapters.
 
+### D14 · The gate contract: severity decides, nothing else
+
+**Status:** accepted.
+
+- `fail_on` is the lowest blocking severity; `critical` always blocks because
+  nothing is above it.
+- Below the threshold, **high and medium** downgrade to CONDITIONAL. Low and info
+  never do: if they did, every real review would be CONDITIONAL and the verdict
+  would stop meaning anything.
+- High/critical need evidence, `accepted_risk` needs a rationale. A finding
+  without evidence is a guess and must not stop a release.
+- No `blocker` flag on findings and no dedup across lenses: severity plus status
+  is the whole contract, and two lenses independently spotting the same issue is
+  honest, not noise.
+- Unverified (`fallback`, `skipped`) or unprobed (security/frontend under
+  `code-only`) is CONDITIONAL, NO-GO under `--strict`. Zero lenses is
+  CONDITIONAL, never GO.
+- The gate ignores the debate winner and scores.
+- Finding ids are namespaced by the lens prefix (`sec-1`, `ops-2`) inside the
+  gate, not trusted from the model.
+
+Rejected: letting the model mark blockers, dedup by title, and `--strict`
+escalating a medium finding.
+
 ---
 
 ## Rejected (do not re-propose without new information)
