@@ -14,5 +14,10 @@ Status is "open" unless the debate proved the claim false ("not_applicable") or 
 was explicitly accepted ("accepted_risk", which needs a rationale).
 Every critical or high finding needs evidence: `path:line`, a request or a quote.
 
-Set winner "tie" and both scores to 5: they are compatibility fields, not a judgement.
-Ask for another round only if one concrete fact would settle a contested finding.
+Before answering, deduplicate: drop any finding already listed under ALREADY REPORTED,
+and merge findings in your own list that describe the same defect. The report must not
+contain the same defect twice.
+
+If your findings include an open critical or high, do not ask for another round: the
+release is already blocked. Otherwise ask for another round only if one concrete fact
+would settle a contested finding.

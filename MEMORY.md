@@ -188,18 +188,37 @@ not as new adapters.
   would stop meaning anything.
 - High/critical need evidence, `accepted_risk` needs a rationale. A finding
   without evidence is a guess and must not stop a release.
-- No `blocker` flag on findings and no dedup across lenses: severity plus status
-  is the whole contract, and two lenses independently spotting the same issue is
-  honest, not noise.
-- Unverified (`fallback`, `skipped`) or unprobed (security/frontend under
-  `code-only`) is CONDITIONAL, NO-GO under `--strict`. Zero lenses is
-  CONDITIONAL, never GO.
+- No `blocker` flag on findings: severity plus status is the whole contract.
+  Cross-lens duplicates are removed by the judge (D16), not merged by the gate.
+- Unverified (`fallback`, `skipped`, `error`) is CONDITIONAL, NO-GO under
+  `--strict`. Zero lenses is CONDITIONAL, never GO.
+- `code-only` is recorded as a coverage gap but does not downgrade: a clean code
+  review can be GO. Probing is an extra guarantee, not a precondition.
+  Revised 2026-11-23: "code-only with a probed lens is CONDITIONAL at best"
+  made GO unreachable, and `--strict` already exists for that guarantee.
 - The gate ignores the debate winner and scores.
 - Finding ids are namespaced by the lens prefix (`sec-1`, `ops-2`) inside the
   gate, not trusted from the model.
 
 Rejected: letting the model mark blockers, dedup by title, and `--strict`
 escalating a medium finding.
+
+### D16 · Lenses share findings; the judge deduplicates
+
+**Status:** accepted. Supersedes "no dedup across lenses" in D14.
+
+- Each lens receives the findings of the lenses before it, as `ALREADY REPORTED`
+  in the brief. Order is the table order (`general` first); later lenses avoid
+  repeating what is already there.
+- The existing judge call is the dedup step: it drops findings already reported
+  and merges duplicates in its own list. No extra model call: a separate pass
+  would see the same text and add cost and drift.
+- The judge does not ask for another round when it already has an open
+  critical/high: the release is blocked and another round cannot change it.
+- No deterministic merge in the gate: matching by `path:line` alone can hide two
+  different defects at the same line.
+
+Rejected: a separate dedup call, and gate-level merging by title or evidence.
 
 ### D15 · A lens is a `DebateConfig`, and review turns need their own template
 
@@ -234,7 +253,7 @@ putting the sentence limit override in the role prompt.
 | Probe-first, then read code | Cannot tell who owns what; a 200 is not IDOR without expected behaviour |
 | Blind fuzzing / scanning | Noise, abuse exposure, no hypothesis to verify |
 | Active probing on the laptop | Executes reviewed code locally, orphaned processes, no isolation |
-| LLM synthesis of cross-lens findings (v1) | Deterministic dedup plus report grouping is enough; a model pass just adds cost and drift |
+| LLM synthesis of cross-lens findings (v1) | The judge already dedups with the context it has; a separate pass just adds cost and drift |
 | Auto-post PR comments (v1) | Noise before the false-positive rate is known |
 | Renaming the repo | Cosmetic; deferred until the split |
 | Five fixed lenses | Extra cost for coverage that folds into existing lenses |

@@ -27,8 +27,9 @@ LENSES: tuple[Lens, ...] = (
         prefix="gen",
         title="General adversarial release review",
         focus=(
-            "the highest-impact, concrete reasons this release should not ship",
-            "anything the specialised lenses would miss on this particular repo",
+            "concrete, release-blocking defects in this repository, with `path:line` evidence",
+            "cross-cutting failures the specialised lenses miss: broken flows, dangerous "
+            "defaults, data loss",
         ),
     ),
     Lens(
@@ -127,6 +128,7 @@ def build_brief(lens: Lens, data: Mapping[str, Any]) -> str:
         scope=data.get("scope") or "code-only",
         lens_title=lens.title,
         focus="\n".join(f"- {item}" for item in lens.focus),
+        prior=data.get("prior") or "none reported yet",
     )
 
 

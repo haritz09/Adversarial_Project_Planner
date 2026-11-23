@@ -13,23 +13,20 @@ NO_GO = "NO-GO"
 EXIT_CODES = {GO: 0, CONDITIONAL: 1, NO_GO: 2}
 SCOPES = ("code-only", "full")
 
-# The engine's statuses that produced no usable verdict.
 UNUSABLE = frozenset({"fallback", "skipped"})
 
-# Below the threshold, these still deserve a human look before shipping.
-# `low` and `info` are notes: they never change the verdict, or CONDITIONAL would
-# be the only answer a real review ever gives.
 NOTABLE = frozenset({"high", "medium"})
 
 
 @dataclass(frozen=True)
 class LensReport:
-    """One lens' outcome, shaped for the gate (not the engine's own dict)."""
 
     lens: str
     verdict: ReviewVerdict | None = None
     status: str = "decided"
     note: str = ""
+    rounds: int = 0
+    cost_usd: float | None = None
 
 
 @dataclass(frozen=True)
@@ -83,10 +80,14 @@ def _all_findings(reports: Sequence[LensReport]) -> list[Finding]:
     return sorted(findings, key=lambda item: (SEVERITY_RANK[item.severity], item.id))
 
 
-def _all_gaps(reports: Sequence[LensReport]) -> list[str]:
+def _all_gaps(reports: Sequence[LensReport], scope: str) -> list[str]:
     if not reports:
         return ["no lenses executed"]
-    return [gap for report in reports for gap in _gaps_of(report)]
+    gaps = [gap for report in reports for gap in _gaps_of(report)]
+    probing = _probing_gap(reports, scope)
+    if probing:
+        gaps.append(probing)
+    return gaps
 
 
 def _blocking(findings: Sequence[Finding], fail_on: str) -> list[Finding]:
@@ -115,15 +116,20 @@ def _unprobed(reports: Sequence[LensReport], scope: str) -> list[str]:
     return [report.lens for report in reports if report.lens in PROBED_LENSES]
 
 
+def _probing_gap(reports: Sequence[LensReport], scope: str) -> str:
+    unprobed = _unprobed(reports, scope)
+    if not unprobed:
+        return ""
+    return f"scope={scope}: active probing not executed for " + ", ".join(unprobed)
+
+
 def _incomplete_reasons(
-    unverified: Sequence[str], unprobed: Sequence[str], scope: str, strict: bool
+    unverified: Sequence[str], strict: bool
 ) -> tuple[str, list[str]]:
-    reasons = []
-    if unverified:
-        reasons.append("unverified lenses: " + ", ".join(unverified))
-    if unprobed:
-        reasons.append(f"scope={scope}: active probing not executed for " + ", ".join(unprobed))
-    return (NO_GO if strict else CONDITIONAL), reasons
+    return (
+        NO_GO if strict else CONDITIONAL,
+        ["unverified lenses: " + ", ".join(unverified)],
+    )
 
 
 def _verdict(
@@ -143,9 +149,12 @@ def _verdict(
         return NO_GO, [f"{len(blocking)} open finding(s) at or above '{fail_on}'", *details]
 
     unverified = [report.lens for report in reports if _is_unverified(report)]
-    unprobed = _unprobed(reports, scope)
-    if unverified or unprobed:
-        return _incomplete_reasons(unverified, unprobed, scope, strict)
+    if unverified:
+        return _incomplete_reasons(unverified, strict)
+
+    probing = _probing_gap(reports, scope)
+    if probing and strict:
+        return NO_GO, [probing]
 
     notable = _notable(findings, fail_on)
     if notable:
@@ -161,7 +170,6 @@ def decide(
     fail_on: str = "high",
     strict: bool = False,
 ) -> GateResult:
-    """Turn lens verdicts into one release decision."""
     _validate(scope, fail_on)
     findings = _all_findings(reports)
     verdict, reasons = _verdict(
@@ -172,6 +180,6 @@ def decide(
         exit_code=EXIT_CODES[verdict],
         reasons=tuple(reasons),
         findings=tuple(findings),
-        gaps=tuple(_all_gaps(reports)),
+        gaps=tuple(_all_gaps(reports, scope)),
         scope=scope,
     )

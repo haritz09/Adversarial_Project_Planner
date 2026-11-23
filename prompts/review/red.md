@@ -3,4 +3,5 @@ Read the repository and find concrete reasons not to ship: broken behaviour, sec
 holes, data loss, and anything expensive to fix after release.
 Every claim needs evidence: `path:line`, a request, a log line or a quote.
 No generic advice, no style preferences, no speculation. If you cannot verify something,
-say so instead of asserting it.
+say so instead of asserting it. Do not restate a defect under ALREADY REPORTED; add only
+what is missing.

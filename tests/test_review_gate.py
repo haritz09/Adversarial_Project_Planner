@@ -51,7 +51,12 @@ CASES = [
         {"lens": "general", "lens_status": "fallback", "strict": True},
         NO_GO,
     ),
-    ("security without a target is conditional", {"lens": "security"}, CONDITIONAL),
+    ("security passes on code alone", {"lens": "security"}, GO),
+    (
+        "security is no-go when strict",
+        {"lens": "security", "strict": True},
+        NO_GO,
+    ),
     (
         "security passes with a full scope",
         {"lens": "security", "scope": "full"},
@@ -139,3 +144,10 @@ def test_finding_contract_rejects_guesses():
         Finding(id=" ", title="no id", severity="low")
 
     assert Finding(id="1", title="fine", severity="medium").status == "open"
+
+
+def test_code_only_records_the_missing_probe_as_a_gap():
+    result = decide([LensReport("security", ReviewVerdict(lens="security"))])
+
+    assert result.verdict == GO
+    assert any("active probing not executed for security" in gap for gap in result.gaps)
