@@ -39,7 +39,7 @@ def _make_turn_node(cfg: DebateConfig, agent: str, resolver: ModelResolver | Non
         round_index = int(state.get("_rounds_completed", 0)) + 1
 
         llm = resolve_model(model_ref, resolver)
-        prompt = render_turn_prompt(cfg, agent, state, round_index)
+        prompt = render_turn_prompt(cfg, agent, state)
         message = llm.invoke(prompt)
         content = message_text(message).strip()
         if not content:

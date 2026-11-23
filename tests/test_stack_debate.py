@@ -60,8 +60,8 @@ def test_brief_challenges_a_user_supplied_stack():
 
 def test_prompts_include_context_and_the_opponent_argument():
     cfg = stack_cfg()
-    prompt_a = render_turn_prompt(cfg, "A", STATE, round_index=2)
-    prompt_b = render_turn_prompt(cfg, "B", STATE, round_index=2)
+    prompt_a = render_turn_prompt(cfg, "A", STATE)
+    prompt_b = render_turn_prompt(cfg, "B", STATE)
 
     assert "real-time chat app" in prompt_a
     assert "Firebase is simpler for two devs" in prompt_a
@@ -72,7 +72,7 @@ def test_prompts_include_context_and_the_opponent_argument():
 
 def test_prompts_include_empty_history_guidance():
     cfg = stack_cfg()
-    prompt = render_turn_prompt(cfg, "A", {"debate_inputs": {}}, round_index=1)
+    prompt = render_turn_prompt(cfg, "A", {"debate_inputs": {}})
 
     assert "if empty, no arguments have been made yet" in prompt
 

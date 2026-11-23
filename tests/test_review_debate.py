@@ -68,7 +68,7 @@ def test_every_lens_builds_a_review_debate(lens):
     cfg = build_lens_debate(lens, models())
     state = {"debate_inputs": {cfg.name: {"repo": "C:/repo", "ref": "abc123"}}}
 
-    opening = render_turn_prompt(cfg, "A", state, 1)
+    opening = render_turn_prompt(cfg, "A", state)
     judge = render_judge_prompt(cfg, state)
 
     assert cfg.name == lens.id
