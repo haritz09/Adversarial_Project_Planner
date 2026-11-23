@@ -42,12 +42,12 @@ ANTHROPIC_API_KEY = ""
 # timeout = 900
 # login = "gemini   (pick 'Login with Google')"
 #
-# [providers.opencode]
-# type = "cli"
-# command = ["opencode", "run"]
-# prompt = "arg"
-# args = ["--model", "{model}"]
-# timeout = 900
+[providers.opencode]
+type = "cli"
+command = ["opencode", "run"]
+prompt = "arg"
+args = ["--model", "{model}"]
+timeout = 900
 
 # --- Any API key, any OpenAI-shaped endpoint ------------------------------
 

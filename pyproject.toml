@@ -1,3 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adversarial-project-planner"
+version = "0.1.0"
+description = "Adversarial project planner and code release reviewer"
+requires-python = ">=3.10"
+dependencies = [
+  "langchain-core>=1.0,<2",
+  "langchain-groq>=1,<2",
+  "langchain-google-genai>=4,<5",
+  "langchain-openai>=1,<2",
+  "langgraph>=1,<2",
+  "langfuse>=4,<5",
+  "mcp>=1,<2",
+  "pydantic>=2,<3",
+  "python-dotenv>=1,<2",
+  "tomli>=2,<3; python_version < '3.11'",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "ruff"]
+
+[project.scripts]
+adversarial-plan = "main:main"
+ap-review = "review.cli:main"
+
+[tool.setuptools]
+py-modules = ["main", "observability"]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["agents*", "core*", "graph*", "prompts*", "review*", "sinks*", "tools*"]
+namespaces = true
+
+[tool.setuptools.package-data]
+prompts = ["*.md", "**/*.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-m 'not live'"
