@@ -21,5 +21,6 @@ env/
 # Generated exports
 output/
 vault/
+review-output/
 
 run_test_notion.py
