@@ -201,6 +201,28 @@ not as new adapters.
 Rejected: letting the model mark blockers, dedup by title, and `--strict`
 escalating a medium finding.
 
+### D15 · A lens is a `DebateConfig`, and review turns need their own template
+
+**Status:** accepted.
+
+- `build_lens_debate(lens, models)` is the whole adapter: one red/blue/judge
+  triad per lens, `min_rounds=1`, `max_rounds=2`, `max_turn_chars=16k` so the
+  judge sees the full argument, no `skip_when` and no `fallback_verdict` (an
+  invented fallback finding would be a false verdict).
+- `turn_opening` / `turn_response` are config fields with the planner's
+  templates as defaults. The review points both at `review/turn.md`: the stack
+  template caps a turn at 3-5 sentences, which is incompatible with listing
+  findings with `path:line`.
+- Red, blue and judge prompts are shared by all lenses; the focus taxonomy goes
+  into the brief. Adding a lens is one `Lens` row.
+- The brief carries repo path, revision, scope and focus, never file contents:
+  the CLI agent reads the repository itself.
+- Prompts are loaded inside the factory, not at module level, so importing the
+  lens table (the gate does) never depends on prompt files.
+
+Rejected: per-lens prompt files (six copies of the same three prompts), and
+putting the sentence limit override in the role prompt.
+
 ---
 
 ## Rejected (do not re-propose without new information)

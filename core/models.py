@@ -114,6 +114,9 @@ class DebateConfig:
     history_rounds: int = 2
     max_turn_chars: int = 4000
 
+    turn_opening: str = "debate/turn_opening.md"
+    turn_response: str = "debate/turn_response.md"
+
     fallback_verdict: Callable[[Sequence[DebateTurn]], dict[str, Any]] | None = None
 
     skip_when: Callable[[Mapping[str, Any]], bool] | None = None

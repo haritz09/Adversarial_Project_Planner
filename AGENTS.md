@@ -38,7 +38,7 @@ imports `core/` and `sinks/` only.
 | `sinks/` | `base` contract, `markdown`, `obsidian`, `notion`, lazy `registry` |
 | `tools/export.py` | Export node + automatic Markdown fallback |
 | `observability.py` | Optional Langfuse |
-| `review/` | `models.py` (`Finding`, `ReviewVerdict`), `lenses.py`, `gate.py`. Planned: `cli`, `profile`, `report`, `brief/`, `probe/`, `lab/`, `frontend/` |
+| `review/` | `models.py` (`Finding`, `ReviewVerdict`), `lenses.py` (`Lens`, `build_lens_debate`), `gate.py`. Planned: `cli`, `profile`, `report`, `brief/`, `probe/`, `lab/`, `frontend/` |
 | `core/cli/` | `provider.py` (the single CLI adapter), `config.py` (`models.toml` -> registry), `process.py` (timeout + tree kill), `check.py` (seat probe) |
 
 ## Run
@@ -130,9 +130,14 @@ plus `frontend` only with `--url`.
 ## Prompts
 
 All prompt text is Markdown under `prompts/` (`debate/`, `tech_stack/`,
-`generators/`, `intake/`, planned `review/`). `load_prompt(name)` for static text,
+`generators/`, `intake/`, `review/`). `load_prompt(name)` for static text,
 `render_prompt(name, **values)` for `str.format` templates (double literal
 braces). Never inline prompt prose in Python.
+
+A debate may override `turn_opening` / `turn_response`; the review uses
+`review/turn.md` because the stack templates cap a turn at 3-5 sentences. The
+review's red, blue and judge prompts are shared by every lens; the lens focus
+enters through the brief (`prompts/review/brief.md`).
 
 ## Tests
 
@@ -146,8 +151,10 @@ needs no `.env` or network. Fakes come from `tests/helpers.py`
 (`GenericFakeChatModel`; running out of scripted responses raises by design).
 `test_engine.py` is the engine contract, `test_graph_smoke.py` proves a new
 `DebateConfig` needs no engine change, `test_sinks.py` the sink contract.
-`test_review_gate.py` is the release-decision matrix and `test_review_boundary.py`
-keeps `review/` from importing the planner. `live` tests are deselected;
+`test_review_gate.py` is the release-decision matrix,
+`test_review_boundary.py` keeps `review/` from importing the planner, and
+`test_review_debate.py` runs one lens through the engine into the gate and
+checks every lens builds. `live` tests are deselected;
 `pyproject.toml` owns pytest/ruff config; CI runs 3.11. The rest of the reviewer
 is still unverified.
 
@@ -163,8 +170,8 @@ is still unverified.
   a disabled session, not a failure.
 - `MemorySaver` is the CLI checkpointer; `--thread-id` groups a run and names the
   export folder; resumes use `Command(resume=answer)`.
-- Adding a lens = a `DebateConfig` in `review/lenses.py` + a prompt file. No
-  engine change.
+- Adding a lens = one `Lens` row in `review/lenses.py`. Red, blue and judge are
+  shared and the focus enters through the brief. No engine change.
 - One function, one job (SRP). A function that collects, normalizes and decides in the same body gets split: the public entry point orchestrates, each helper  does exactly one thing.
 - One adapter for all command-line agents. A new agent is a `models.toml` block,
   never a Python class or a vendor branch in `core/cli/provider.py`.

@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
+
+from core.models import DebateConfig, DebateModels, RoleSpec
+from core.prompt_loader import load_prompt, render_prompt
+from review.models import ReviewVerdict
 
 
 @dataclass(frozen=True)
@@ -96,3 +102,48 @@ LENSES: tuple[Lens, ...] = (
 BY_ID = {lens.id: lens for lens in LENSES}
 
 PROBED_LENSES = frozenset(lens.id for lens in LENSES if lens.probes)
+
+REVIEW_MAX_TURN_CHARS = 16_000
+REVIEW_MAX_ROUNDS = 2
+REVIEW_TURN_PROMPT = "review/turn.md"
+
+
+def resolve_lens(value: str | Lens) -> Lens:
+    if isinstance(value, Lens):
+        return value
+    try:
+        return BY_ID[value]
+    except KeyError:
+        raise ValueError(
+            f"unknown lens {value!r}; choose from {', '.join(BY_ID)}"
+        ) from None
+
+
+def build_brief(lens: Lens, data: Mapping[str, Any]) -> str:
+    return render_prompt(
+        "review/brief.md",
+        repo=data.get("repo") or "the current working directory",
+        ref=data.get("ref") or "unknown",
+        scope=data.get("scope") or "code-only",
+        lens_title=lens.title,
+        focus="\n".join(f"- {item}" for item in lens.focus),
+    )
+
+
+def build_lens_debate(lens: str | Lens, models: DebateModels) -> DebateConfig:
+    resolved = resolve_lens(lens)
+    return DebateConfig(
+        name=resolved.id,
+        topic=resolved.title,
+        role_a=RoleSpec(label="A", system_prompt=load_prompt("review/red.md")),
+        role_b=RoleSpec(label="B", system_prompt=load_prompt("review/blue.md")),
+        judge_rubric=load_prompt("review/judge.md"),
+        verdict_model=ReviewVerdict,
+        models=models,
+        brief=lambda data: build_brief(resolved, data),
+        min_rounds=1,
+        max_rounds=REVIEW_MAX_ROUNDS,
+        max_turn_chars=REVIEW_MAX_TURN_CHARS,
+        turn_opening=REVIEW_TURN_PROMPT,
+        turn_response=REVIEW_TURN_PROMPT,
+    )
