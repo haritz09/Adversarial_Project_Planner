@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import AIMessage
 
-
 from core.llm import ModelSpec
 from core.models import DebateModels
 from review.cli import models_from_env, select_lenses
