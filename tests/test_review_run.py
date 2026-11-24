@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import AIMessage
 
+
 from core.llm import ModelSpec
 from core.models import DebateModels
 from review.cli import models_from_env, select_lenses
@@ -111,7 +112,6 @@ def test_bad_input_fails_before_any_model_call():
         select_lenses(["nope"])
     with pytest.raises(ValueError, match="REVIEW_MODEL_RED"):
         models_from_env({})
-
 
 def test_prior_findings_feed_the_next_brief():
     earlier = LensReport(

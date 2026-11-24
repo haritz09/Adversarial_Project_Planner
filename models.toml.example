@@ -49,6 +49,11 @@ prompt = "arg"
 args = ["--model", "{model}"]
 timeout = 900
 
+[review.seats]
+red = "opencode:opencode/beam-free"
+blue = "opencode:opencode/beam-free"
+judge = "opencode:opencode/beam-free"
+
 # --- Any API key, any OpenAI-shaped endpoint ------------------------------
 
 # [providers.openrouter]

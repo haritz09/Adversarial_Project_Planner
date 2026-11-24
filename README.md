@@ -113,21 +113,16 @@ adversarial-plan
 ```
 
 `ap-review` reviews the current directory by default and writes reports to
-`review-output\`. Configure `REVIEW_MODEL_RED`, `REVIEW_MODEL_BLUE` and
-`REVIEW_MODEL_JUDGE` in the environment. The provider configuration can be in a
-`models.toml` in the current project, or set `MODELS_TOML` to a shared config
-file. For OpenCode, copy [models.toml.example](./models.toml.example) to a
-local `models.toml` and set `MODELS_TOML` to its full path. The model seats use
-the form `opencode:opencode/<model-id>`.
+`review-output\`. Copy [models.toml.example](./models.toml.example) to
+`models.toml` in the project being reviewed, then edit its `[review.seats]`
+values. Each seat uses the form `provider:model`; the environment variables
+`REVIEW_MODEL_RED`, `REVIEW_MODEL_BLUE` and `REVIEW_MODEL_JUDGE` override the
+TOML values when set.
 
-For example, configure OpenCode once in CMD (then open a new CMD window):
+For OpenCode, authenticate once and set the three seats in `models.toml`:
 
 ```cmd
 opencode auth login
-setx MODELS_TOML "C:\path\to\Adversarial_Project_Planner\models.toml"
-setx REVIEW_MODEL_RED opencode:opencode/beam-free
-setx REVIEW_MODEL_BLUE opencode:opencode/beam-free
-setx REVIEW_MODEL_JUDGE opencode:opencode/beam-free
 ```
 
 ## Observability

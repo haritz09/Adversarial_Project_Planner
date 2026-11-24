@@ -4,6 +4,8 @@ import os
 import shutil
 import signal
 import subprocess
+import sys
+import threading
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,6 +31,26 @@ def _tail(text: str, limit: int = 800) -> str:
     if not value:
         return "<empty>"
     return value if len(value) <= limit else "..." + value[-limit:]
+
+
+def _feed(stream, text: str) -> None:
+    try:
+        if text:
+            stream.write(text)
+        stream.close()
+    except OSError:
+        pass
+
+
+def _drain(stream, chunks: list[str], echo: bool) -> None:
+    try:
+        for line in stream:
+            chunks.append(line)
+            if echo and sys.stderr is not None:
+                sys.stderr.write(line)
+                sys.stderr.flush()
+    finally:
+        stream.close()
 
 
 def _kill_tree(process: subprocess.Popen) -> None:
@@ -93,18 +115,42 @@ def run_process(
         start_new_session=os.name != "nt",
     )
 
+    stdout_chunks: list[str] = []
+    stderr_chunks: list[str] = []
+    threads: list[threading.Thread] = []
+
     try:
-        stdout, stderr = process.communicate(input=stdin_text, timeout=timeout)
+        threads = [
+            threading.Thread(
+                target=_feed, args=(process.stdin, stdin_text), daemon=True
+            ),
+            threading.Thread(
+                target=_drain, args=(process.stdout, stdout_chunks, False), daemon=True
+            ),
+            threading.Thread(
+                target=_drain, args=(process.stderr, stderr_chunks, True), daemon=True
+            ),
+        ]
+        for thread in threads:
+            thread.start()
+
+        process.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
         _kill_tree(process)
-        _, stderr = process.communicate()
+        process.wait()
         raise ProviderTimeout(
             f"{Path(executable).name} timed out after {timeout:.0f}s. "
-            f"stderr: {_tail(stderr)}"
+            f"stderr: {_tail(''.join(stderr_chunks))}"
         ) from None
     except KeyboardInterrupt:
         _kill_tree(process)
         raise
+    finally:
+        for thread in threads:
+            thread.join()
+
+    stdout = "".join(stdout_chunks)
+    stderr = "".join(stderr_chunks)
 
     if process.returncode != 0:
         raise ProviderError(

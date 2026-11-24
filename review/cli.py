@@ -6,7 +6,7 @@ import sys
 from collections.abc import Mapping
 
 from core.cli.check import main as check_main
-from core.cli.config import ProviderConfigError, load_models_config
+from core.cli.config import ProviderConfigError, load_models_config, load_review_seats
 from core.llm import ModelSpec
 from core.models import DebateModels
 from review.context import PROFILES, RunContext
@@ -71,13 +71,17 @@ def select_lenses(requested: list[str] | None) -> tuple[str, ...]:
     return tuple(dict.fromkeys(selected))
 
 
-def models_from_env(env: Mapping[str, str] | None = None) -> DebateModels:
+def models_from_env(
+    env: Mapping[str, str] | None = None,
+    configured: Mapping[str, str] | None = None,
+) -> DebateModels:
     source = os.environ if env is None else env
+    defaults = configured or {}
     seats: dict[str, ModelSpec] = {}
     for role, key in SEAT_ENV.items():
-        raw = (source.get(key) or "").strip()
+        raw = (source.get(key) or defaults.get(role) or "").strip()
         if not raw:
-            raise ValueError(f"{key} is not set (expected provider:model)")
+            raise ValueError(f"{key} is not set in the environment or models.toml")
         seats[role] = ModelSpec.parse(raw)
     return DebateModels(a=seats["red"], b=seats["blue"], judge=seats["judge"])
 
@@ -106,13 +110,14 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         load_models_config(args.models)
+        review_seats = load_review_seats(args.models)
     except ProviderConfigError as exc:
         return _fail(f"models config: {exc}")
 
     try:
         lenses = select_lenses(args.lens)
         context = RunContext.capture(args.repo, profile=args.profile)
-        models = models_from_env()
+        models = models_from_env(configured=review_seats)
     except ValueError as exc:
         return _fail(str(exc))
 

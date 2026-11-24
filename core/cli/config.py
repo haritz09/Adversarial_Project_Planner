@@ -53,6 +53,56 @@ def resolve_models_path(path: str | os.PathLike[str] | None = None) -> Path | No
     return default if default.is_file() else None
 
 
+def _read_toml(target: Path) -> dict[str, Any]:
+    toml = _toml_module()
+    try:
+        data = toml.loads(target.read_text(encoding="utf-8"))
+    except (toml.TOMLDecodeError, UnicodeDecodeError) as exc:
+        raise ProviderConfigError(f"{target}: invalid TOML: {exc}") from exc
+    return data
+
+
+def load_review_seats(
+    path: str | os.PathLike[str] | None = None,
+) -> dict[str, str]:
+    target = resolve_models_path(path)
+    if target is None:
+        return {}
+
+    data = _read_toml(target)
+    review = data.get("review", {})
+    if not isinstance(review, dict):
+        raise ProviderConfigError(f"{target}: `review` must be a table.")
+    seats = review.get("seats", {})
+    if not isinstance(seats, dict):
+        raise ProviderConfigError(f"{target}: `review.seats` must be a table.")
+
+    expected = {"red", "blue", "judge"}
+    unknown = set(seats) - expected
+    if unknown:
+        raise ProviderConfigError(
+            f"{target}: unknown review seat(s): {', '.join(sorted(unknown))}."
+        )
+    if seats and set(seats) != expected:
+        missing = ", ".join(sorted(expected - set(seats)))
+        raise ProviderConfigError(f"{target}: missing review seat(s): {missing}.")
+
+    result: dict[str, str] = {}
+    for role, value in seats.items():
+        if not isinstance(value, str) or not value.strip():
+            raise ProviderConfigError(
+                f"{target}: `review.seats.{role}` must be a non-empty provider:model."
+            )
+        try:
+            ModelSpec.parse(value.strip())
+        except ValueError as exc:
+            raise ProviderConfigError(
+                f"{target}: invalid `review.seats.{role}`: {exc}"
+            ) from exc
+        result[role] = value.strip()
+    return result
+
+
 def _strings(value: Any, where: str) -> tuple[str, ...]:
     if value is None:
         return ()
@@ -136,12 +186,7 @@ def load_models_config(
     if target is None:
         return ()
 
-    toml = _toml_module()
-    try:
-        data = toml.loads(target.read_text(encoding="utf-8"))
-    except (toml.TOMLDecodeError, UnicodeDecodeError) as exc:
-        raise ProviderConfigError(f"{target}: invalid TOML: {exc}") from exc
-
+    data = _read_toml(target)
     providers = data.get("providers") or {}
     if not isinstance(providers, dict):
         raise ProviderConfigError(f"{target}: `providers` must be a table.")

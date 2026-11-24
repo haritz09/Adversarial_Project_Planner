@@ -9,6 +9,7 @@ the reply.
 from core.cli.config import (
     ProviderConfigError,
     load_models_config,
+    load_review_seats,
     provider_hints,
     resolve_models_path,
 )
@@ -23,6 +24,7 @@ __all__ = [
     "ProviderError",
     "ProviderTimeout",
     "load_models_config",
+    "load_review_seats",
     "provider_hints",
     "resolve_models_path",
     "run_process",
