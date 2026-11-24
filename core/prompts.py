@@ -51,7 +51,6 @@ def render_turn_prompt(
     cfg: DebateConfig,
     agent: str,
     state: Mapping[str, Any],
-    round_index: int,
 ) -> str:
     role = cfg.role_a if agent == AGENT_A else cfg.role_b
     opponent = AGENT_B if agent == AGENT_A else AGENT_A
@@ -59,7 +58,7 @@ def render_turn_prompt(
     turns: Sequence[DebateTurn] = state.get("_turns", [])
 
     return render_prompt(
-        "debate/turn_opening.md" if not turns else "debate/turn_response.md",
+        cfg.turn_opening if not turns else cfg.turn_response,
         role=role.system_prompt.strip(),
         topic=cfg.topic,
         context=cfg.brief(data).strip(),

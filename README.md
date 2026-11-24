@@ -63,12 +63,12 @@ is needed until a model is actually invoked.
 ```bash
 git clone <repo>
 cd Adversarial_Project_Planner
-python -m venv venv
+python -m venv .venv
 # Windows
-.\venv\Scripts\activate
+.\.venv\Scripts\activate
 # macOS / Linux
-source venv/bin/activate
-pip install -r requirements.txt
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
 cp .env.example .env
 ```
 
@@ -79,20 +79,51 @@ Python 3.10+. Only the providers you use need keys:
 - `NOTION_TOKEN` + `NOTION_PARENT_PAGE_ID` only for Notion export.
 - `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY` only for tracing.
 
-Nothing is validated at import time: `python main.py --help` works with no
+Nothing is validated at import time: `adversarial-plan --help` works with no
 `.env` at all.
 
 ## Usage
 
 ```bash
-python main.py --describe "Build a real-time chat app in 3 weeks with 2 devs"
-python main.py --sink markdown --output-dir output
-python main.py --sink obsidian --output-dir vault
-python main.py --no-trace
+adversarial-plan --describe "Build a real-time chat app in 3 weeks with 2 devs"
+adversarial-plan --sink markdown --output-dir output
+adversarial-plan --sink obsidian --output-dir vault
+adversarial-plan --no-trace
 ```
 
 If `--describe` is omitted the CLI prompts for a description. Missing intake
 details are asked interactively.
+
+## Use the reviewer in another project
+
+Install the tool into the other project's virtual environment. In CMD, from
+that project's root:
+
+```cmd
+.\.venv\Scripts\activate.bat
+python -m pip install -e "C:\path\to\Adversarial_Project_Planner"
+ap-review --lens general
+```
+
+The install adds the planner and reviewer commands to that environment:
+
+```text
+ap-review
+adversarial-plan
+```
+
+`ap-review` reviews the current directory by default and writes reports to
+`review-output\`. Copy [models.toml.example](./models.toml.example) to
+`models.toml` in the project being reviewed, then edit its `[review.seats]`
+values. Each seat uses the form `provider:model`; the environment variables
+`REVIEW_MODEL_RED`, `REVIEW_MODEL_BLUE` and `REVIEW_MODEL_JUDGE` override the
+TOML values when set.
+
+For OpenCode, authenticate once and set the three seats in `models.toml`:
+
+```cmd
+opencode auth login
+```
 
 ## Observability
 

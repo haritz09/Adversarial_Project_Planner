@@ -1,5 +1,6 @@
 .env
 AGENT_CONTEXT.md
+models.toml
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -13,6 +14,7 @@ tests/__pycache__/
 .venv/
 venv/
 env/
+*.egg-info/
 
 # Pytest
 .pytest_cache/
@@ -20,5 +22,6 @@ env/
 # Generated exports
 output/
 vault/
+review-output/
 
 run_test_notion.py

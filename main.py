@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from langgraph.types import Command
 
 import observability
+from core.cli.config import ProviderConfigError, load_models_config
 from graph.pipeline import build_graph
 from sinks.registry import available_sinks
 
@@ -156,10 +157,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Identifier for this run (groups traces and names the export folder)",
     )
     parser.add_argument("--no-trace", action="store_true", help="Disable Langfuse")
+    parser.add_argument(
+        "--models",
+        default=None,
+        help="Path to models.toml (default: $MODELS_TOML or ./models.toml)",
+    )
     return parser.parse_args(argv)
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
+
+    try:
+        load_models_config(args.models)
+    except ProviderConfigError as exc:
+        raise SystemExit(f"models config: {exc}") from exc
 
     print("\n╔══════════════════════════════════════════╗")
     print("║     Adversarial Project Planner 🤖       ║")

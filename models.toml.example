@@ -1,0 +1,67 @@
+# Bring your own agent or key.
+#
+# Copy this file to `models.toml` (or point $MODELS_TOML at it) and pick seats
+# with the usual `provider:model` strings:
+#
+#   PLANNER_MODEL_DEBATER=claude:sonnet
+#   PLANNER_MODEL_JUDGE=claude:opus
+#
+# Nothing here is vendor-specific: one adapter runs any command-line agent.
+# `{model}` in `args` receives the model name from the seat. Use the model name
+# `default` (`claude:default`) to pass no model argument at all.
+#
+# Check everything at once:
+#   python -m core.cli.check
+
+# --- A CLI agent on a subscription (or its own login) ----------------------
+
+[providers.claude]
+type = "cli"
+command = ["claude", "-p"]          # headless mode, prompt on stdin
+prompt = "stdin"
+args = ["--model", "{model}"]
+timeout = 900
+login = "claude setup-token   (long-lived token for CI)"
+
+# Empty value removes the variable, forcing the CLI's own login even when an
+# API key happens to be exported in the shell.
+[providers.claude.env]
+ANTHROPIC_API_KEY = ""
+
+# [providers.codex]
+# type = "cli"
+# command = ["codex", "exec", "-"]
+# args = ["--model", "{model}", "--sandbox", "read-only"]
+# timeout = 900
+# login = "codex login"
+#
+# [providers.gemini]
+# type = "cli"
+# command = ["gemini"]
+# args = ["--model", "{model}"]
+# timeout = 900
+# login = "gemini   (pick 'Login with Google')"
+#
+[providers.opencode]
+type = "cli"
+command = ["opencode", "run"]
+prompt = "arg"
+args = ["--model", "{model}"]
+timeout = 900
+
+[review.seats]
+red = "opencode:opencode/beam-free"
+blue = "opencode:opencode/beam-free"
+judge = "opencode:opencode/beam-free"
+
+# --- Any API key, any OpenAI-shaped endpoint ------------------------------
+
+# [providers.openrouter]
+# type = "openai_compatible"
+# base_url = "https://openrouter.ai/api/v1"
+# api_key_env = "OPENROUTER_API_KEY"
+#
+# [providers.ollama]
+# type = "openai_compatible"
+# base_url = "http://localhost:11434/v1"
+# api_key = "ollama"                # local servers ignore it, but it must exist
